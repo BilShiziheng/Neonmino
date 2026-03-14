@@ -18,6 +18,10 @@ local soundFiles = {
     btb_break = "b2bcharge_blast_4.ogg",
     btbc = "clearbtb.ogg",
     spin0 = "spin.ogg",
+    countdown3 = "countdown3.ogg",
+    countdown2 = "countdown2.ogg",
+    countdown1 = "countdown1.ogg",
+    go = "go.ogg",
 }
 
 function sfx.load()

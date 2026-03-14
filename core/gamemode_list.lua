@@ -1,27 +1,19 @@
+-- core/gamemode_list.lua
 return {
-    marathon = {
-        name = "马拉松模式",
-        description = "原汁原味的马拉松模式",
-        path = "mode/marathon/main.lua"
-    },
-    ["40l"] = {
+    ["40L"] = {
         name = "40L竞速",
         description = "以你最快的速度Clear 40行.",
-        path = "mode/40l/main.lua"
+        path = "mode/40L/main.lua"
     },
-    blitz = {
-        name = "闪电战",
-        description = "在两分钟内得尽可能多的分数",
-        path = "mode/blitz/main.lua"
-    },
-    quickplay = {
+    QP2 = {
         name = "TETR.IO QUICKPLAY 2",
-        description = "来自io的第二代QUICKPLAY，复刻原汁原味的体验，并削弱了难度",
+        description = "来自io的第二代QUICKPLAY...",
         path = "mode/QP2/main.lua"
     },
-    custom = {
-        name = "自定义",
-        description = "自定义你的游戏.",
-        path = "mode/custom/main.lua"
+    TEST = {
+        name = "测试模式",
+        description = "测试用",
+        path = "mode/TEST/main.lua"
     },
+    -- 其他模式
 }
