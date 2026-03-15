@@ -1,14 +1,28 @@
 -- scenes/game.lua
 local GameScene = {}
-
+local score = 0
 -- 引入必要的模块
 local RS = require("core.RS_data")
 local Bag = require("core.bag_data")
 local SFX = require("core.sfx")
 local Music = require("core.music")
 local Settings = require("core.settings")
-local Scene = require("core.scene")   -- 用于场景切换
-
+local Scene = require("core.scene")
+local lightningFrames = {}
+local lightningLoaded = false
+do
+    local success, img1 = pcall(love.graphics.newImage, "assets/images/spark1.png")
+    local success2, img2 = pcall(love.graphics.newImage, "assets/images/spark2.png")
+    local success3, img3 = pcall(love.graphics.newImage, "assets/images/spark3.png")
+    if success and success2 and success3 then
+        lightningFrames = {img1, img2, img3}
+        lightningLoaded = true
+    end
+end
+local lightningTimer = 0
+local lightningAlpha = 0
+local lightningFrame = 1
+local lightningX, lightningY = 0, 0
 -- ===== 常量定义 =====
 local BOARD_WIDTH = 10
 local BOARD_HEIGHT = 20
@@ -131,7 +145,7 @@ local lastSurgeValue = 0
 
 -- 计时相关
 local gameTimer = 0
-local piecesPlaced = 0  -- 用于 PPS 计算
+local piecesPlaced = 0
 local ppsTimer = 0
 local pps = 0
 
@@ -139,6 +153,12 @@ local pps = 0
 local modeConfig = nil
 local totalLines = 0
 local modeName = ""
+
+-- 目标系统相关
+local goalFunction = nil          -- 目标检测函数
+local customUpdate = nil          -- 模式自定义更新
+local customDraw = nil            -- 模式自定义绘制
+local modeCustomState = {}        -- 模式自定义状态（可在 customUpdate 中修改）
 
 -- ===== 辅助函数 =====
 function startShake(x, y, rot, duration)
@@ -175,7 +195,8 @@ function spawnNextPiece()
     end
     currentPiece = table.remove(nextPieces, 1)
     if #nextPieces < 10 then
-        table.insert(nextPieces, Bag.next())
+        local newPiece = Bag.next()
+        table.insert(nextPieces, newPiece)
     end
     spawnPiece()
     piecesPlaced = piecesPlaced + 1
@@ -194,6 +215,9 @@ function isValid(piece, rot, x, y)
 end
 
 function movePiece(dx, dy, playMoveSound)
+    if currentPiece == nil or currentX == nil or currentY == nil or currentRot == nil then
+        return false
+    end
     if isValid(currentPiece, currentRot, currentX + dx, currentY + dy) then
         currentX = currentX + dx
         currentY = currentY + dy
@@ -211,6 +235,9 @@ function movePiece(dx, dy, playMoveSound)
 end
 
 function rotatePiece(dir)
+    if currentPiece == nil or currentX == nil or currentY == nil or currentRot == nil then
+        return false
+    end
     local newRot = (currentRot + dir) % 4
     local kicks = RS.getKicks(currentPiece, currentRot, newRot)
 
@@ -248,13 +275,18 @@ function lockPiece()
         local newSurge = btbCount - 3
         if newSurge > surgeValue then
             surgeScale = 1.5
+            if lightningLoaded then
+                lightningTimer = 0.3   -- 动画持续时间
+                lightningAlpha = 1
+                lightningFrame = 1
+            end
         end
         surgeValue = newSurge
     else
         surgeValue = 0
     end
     startShake(0, 2, 0, 0.3)
-
+    
     local allAboveCeiling = true
     for _, cell in ipairs(shape) do
         if currentY + cell[2] <= BOARD_HEIGHT then
@@ -335,12 +367,6 @@ function lockPiece()
     end
 
     totalLines = totalLines + lines
-
-    if modeConfig and modeConfig.target and totalLines >= modeConfig.target then
-        completed = true
-        SFX.play("allclear")
-        return
-    end
 
     local isSpecial = false
     if lines > 0 and (isSpin or lines >= 4) then
@@ -454,6 +480,9 @@ function resetGame()
     for i = 1, NEXT_ROWS do
         table.insert(nextPieces, Bag.next())
     end
+    -- 重置所有数据
+    lightningTimer = 0
+    lightningAlpha = 0
     holdPiece = nil
     canHold = true
     gameOver = false
@@ -464,6 +493,7 @@ function resetGame()
     messageTimer = 0
     dasKey = nil
     dasTimer = 0
+    score = 0
     softDropPressed = false
     isLockPending = false
     lockTimer = 0
@@ -472,14 +502,16 @@ function resetGame()
     isBtbActive = false
     lastWasSpecial = false
     totalLines = 0
-    completed = false  -- 重置完成状态
+    completed = false
     gameTimer = 0
     piecesPlaced = 0
     pps = 0
     shake.timer = 0
     shake.maxX, shake.maxY, shake.maxRot = 0, 0, 0
+    modeCustomState = {}
 
     -- 开始倒计时
+    spawnNextPiece()
     countdown = true
     countdownTimer = 3
     countdownStep = 3
@@ -576,7 +608,7 @@ end
 
 -- ===== 场景回调 =====
 function GameScene.load()
-    SFX.load()  -- 加载音效
+    SFX.load()
 
     modeConfig = _G.currentModeConfig or { start_speed = 0.5, name = "未知模式" }
     _G.currentModeConfig = nil
@@ -584,6 +616,34 @@ function GameScene.load()
         fallInterval = modeConfig.start_speed
     end
     modeName = modeConfig.name or "未知模式"
+
+    -- 处理目标函数
+    if type(modeConfig.goal) == "function" then
+        goalFunction = modeConfig.goal
+    elseif type(modeConfig.goal) == "table" and modeConfig.goal.type then
+        local target = require("core.target_data")
+        print("target_data 已加载，包含类型:", target.lines and "lines" or "无lines")  -- 调试
+        local generator = target[modeConfig.goal.type]
+        if generator then
+            goalFunction = generator(modeConfig.goal.value)
+            print("目标函数生成成功")
+        else
+            print("警告：未知的目标类型 " .. tostring(modeConfig.goal.type))
+            goalFunction = nil
+        end
+    end
+
+    -- 加载自定义钩子
+    if type(modeConfig.customUpdate) == "function" then
+        customUpdate = modeConfig.customUpdate
+    else
+        customUpdate = nil
+    end
+    if type(modeConfig.customDraw) == "function" then
+        customDraw = modeConfig.customDraw
+    else
+        customDraw = nil
+    end
 
     local settings = Settings.load()
     DAS_DELAY = settings.das / 60
@@ -624,9 +684,18 @@ function GameScene.update(dt)
             else
                 countdown = false
                 SFX.play("go")
+                -- 确保游戏状态就绪（防止意外 nil）
+                if currentPiece == nil then
+                    print("!!! 倒计时结束但 currentPiece 为 nil，重新生成")
+                    print("nextPieces 长度:", #nextPieces)
+                    print("Bag.next() 测试:", Bag.next())  -- 注意：这会消耗一个块，仅调试用
+                    spawnNextPiece()
+                end
+                isLockPending = false
+                lockTimer = 0
+                fallTimer = 0
             end
         end
-        -- 倒计时期间不更新游戏逻辑
         Music.update()
         if musicDisplayTime > 0 then
             musicDisplayTime = musicDisplayTime - dt
@@ -656,6 +725,17 @@ function GameScene.update(dt)
     end
     surgeBgAngle = (surgeBgAngle + dt * 2) % (math.pi * 2)
 
+    -- 闪电动画更新
+    if lightningTimer > 0 then
+        lightningTimer = lightningTimer - dt
+        if lightningTimer <= 0 then
+            lightningAlpha = 0
+        else
+            lightningAlpha = lightningTimer / 0.3   -- 淡出
+            lightningFrame = math.floor((0.3 - lightningTimer) / 0.1) % 3 + 1
+        end
+    end
+
     -- 震动更新
     if shake.timer > 0 then
         shake.timer = shake.timer - dt
@@ -673,6 +753,38 @@ function GameScene.update(dt)
     end
     if musicDisplayTime > 0 then
         musicDisplayTime = musicDisplayTime - dt
+    end
+
+    -- 调用模式自定义更新（如果存在）
+    if not completed and not gameOver and not paused and not countdown and customUpdate then
+        customUpdate(dt, {
+            totalLines = totalLines,
+            gameTimer = gameTimer,
+            piecesPlaced = piecesPlaced,
+            board = board,
+            currentPiece = currentPiece,
+            currentX = currentX,
+            currentY = currentY,
+            currentRot = currentRot,
+            custom = modeCustomState,
+        })
+    end
+
+    -- 目标达成检测
+    if not completed and goalFunction then
+        local state = {
+            totalLines = totalLines,
+            gameTimer = gameTimer,
+            piecesPlaced = piecesPlaced,
+            custom = modeCustomState,
+        }
+        -- 调试输出
+        print("Debug: totalLines =", totalLines, "goalFunction(state) =", goalFunction(state))
+        if goalFunction(state) then
+            completed = true
+            SFX.play("finished")
+            print(">>> 目标达成！")
+        end
     end
 
     if gameOver then
@@ -736,7 +848,7 @@ function GameScene.update(dt)
 end
 
 function GameScene.keypressed(key)
-    -- 快速重开（R键）
+    -- 快速重开
     if key == "r" or key == "R" then
         resetGame()
         return
@@ -833,7 +945,16 @@ end
 function GameScene.draw()
     -- BTB 显示
     if btbCount > 0 then
-        love.graphics.setColor(1, 1, 0.6, 1)
+        -- 确定前缀颜色：当 btbCount>3 时，使用 surge 背景色，否则默认黄色
+        local prefixColor = {1, 1, 0.6}
+        local bgColor
+        if btbCount > 3 then
+            local colorIndex = math.floor((surgeValue - 1) / 5) + 1
+            colorIndex = math.min(colorIndex, #surgeColors)
+            bgColor = surgeColors[colorIndex]
+            prefixColor = bgColor
+        end
+        love.graphics.setColor(prefixColor[1], prefixColor[2], prefixColor[3], 1)
         love.graphics.setFont(mediumFont)
         local prefix = string.format("B2B x%d", btbCount)
         local x = HOLD_X
@@ -851,10 +972,6 @@ function GameScene.draw()
             local centerX = surgeX + surgeWidth / 2
             local centerY = y + surgeHeight / 2
 
-            local colorIndex = math.floor((surgeValue - 1) / 5) + 1
-            colorIndex = math.min(colorIndex, #surgeColors)
-            local bgColor = surgeColors[colorIndex]
-
             -- 旋转背景
             love.graphics.push()
             love.graphics.translate(centerX, centerY)
@@ -865,6 +982,18 @@ function GameScene.draw()
             local scale = math.max(surgeWidth, surgeHeight) * 1.0 / math.min(imgWidth, imgHeight) + 8 / math.min(imgWidth, imgHeight)
             love.graphics.draw(surgeBgImage, 0, 0, 0, scale, scale, imgWidth/2, imgHeight/2)
             love.graphics.pop()
+
+            -- 闪电动画
+            if lightningTimer > 0 and lightningLoaded then
+                local frame = lightningFrames[lightningFrame]
+                if frame then
+                    local fw, fh = frame:getWidth(), frame:getHeight()
+                    local fx = surgeX + surgeWidth + 10   -- 显示在 surge 数字右侧
+                    local fy = y - fh/2
+                    love.graphics.setColor(bgColor[1], bgColor[2], bgColor[3], lightningAlpha * 0.8)
+                    love.graphics.draw(frame, fx, fy, 0, 1, 1, fw/2, fh/2)
+                end
+            end
 
             -- 数字缩放
             love.graphics.push()
@@ -887,7 +1016,6 @@ function GameScene.draw()
             love.graphics.setFont(mediumFont)
         end
     end
-
     -- 音乐信息
     if musicDisplayTime > 0 then
         local track = Music.getCurrentTrack()
@@ -1021,11 +1149,11 @@ function GameScene.draw()
         love.graphics.pop()
     end
 
-    -- 剩余行数显示（针对 40L 模式）
-    if modeConfig and modeConfig.target and modeConfig.target == 40 then
-        local remaining = math.max(0, modeConfig.target - totalLines)
+    -- 剩余行数显示（仅当模式目标为行数且 target==40 时显示，但可自定义）
+    if modeConfig and modeConfig.goal and modeConfig.goal.type == "lines" and modeConfig.goal.value then
+        local remaining = math.max(0, modeConfig.goal.value - totalLines)
         love.graphics.setColor(1, 1, 1, 0.8)
-        love.graphics.setFont(largeFont)  -- 可改用更大字体
+        love.graphics.setFont(largeFont)
         local text = tostring(remaining)
         local w = largeFont:getWidth(text)
         local x = BOARD_X - w - 40
@@ -1033,7 +1161,7 @@ function GameScene.draw()
         love.graphics.print(text, x, y)
     end
 
-    -- 游戏结束
+    -- 游戏结束    
     if gameOver then
         love.graphics.setColor(1, 1, 1, 0.9)
         love.graphics.setFont(largeFont)
@@ -1046,20 +1174,30 @@ function GameScene.draw()
         love.graphics.print(restart, (WIN_W - restartW)/2, WIN_H/2 + 10)
     end
 
-    -- 帧率和计时器（左下角）
+    -- 帧率和计时器（主板左侧，与底边对齐）
     love.graphics.setColor(1, 1, 1, 0.5)
-    love.graphics.setFont(smallFont)
+    love.graphics.setFont(mediumFont)
 
     local minutes = math.floor(gameTimer / 60)
     local seconds = math.floor(gameTimer % 60)
     local milliseconds = math.floor((gameTimer * 1000) % 1000)
     local timerText = string.format("%02d:%02d.%03d", minutes, seconds, milliseconds)
-    love.graphics.print(timerText, 10, WIN_H - 30)
+    love.graphics.print(timerText, BOARD_X - 180, BOARD_Y + BOARD_H - 30)
 
     local ppsText = string.format("PPS: %.2f", pps)
-    love.graphics.print(ppsText, 10, WIN_H - 55)
+    love.graphics.print(ppsText, BOARD_X - 180, BOARD_Y + BOARD_H - 55)
 
-    love.graphics.setColor(1, 1, 1)
+    -- 调用模式自定义绘制
+    if not paused and not completed and not countdown and customDraw then
+        customDraw({
+            totalLines = totalLines,
+            gameTimer = gameTimer,
+            piecesPlaced = piecesPlaced,
+            board = board,
+            currentPiece = currentPiece,
+            custom = modeCustomState,
+        })
+    end
 
     -- 暂停菜单
     if paused then

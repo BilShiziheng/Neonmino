@@ -22,6 +22,7 @@ local soundFiles = {
     countdown2 = "countdown2.ogg",
     countdown1 = "countdown1.ogg",
     go = "go.ogg",
+    finished = "finish.ogg",
 }
 
 function sfx.load()

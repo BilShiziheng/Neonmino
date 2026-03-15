@@ -39,12 +39,12 @@ function SelectScene.mousepressed(x, y, button)
             -- 转换路径：将斜杠替换为点，并去掉末尾的 .lua
             local moduleName = btn.path:gsub("/", "."):gsub("%.lua$", "")
             local param = require(moduleName)
-            -- 合并列表中的元数据
+            -- 合并列表中的元数据，并确保包含 goal 字段
             local modeConfig = {
                 name = btn.label,
                 description = btn.desc,
-                target = param.target,
                 start_speed = param.start_speed,
+                goal = param.goal,   -- 关键：加入 goal 字段
             }
             _G.currentModeConfig = modeConfig
             Scene.switch("game")
