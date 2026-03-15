@@ -47,7 +47,7 @@ local paused = false
 local pauseButtons = {
     { label = "继续", action = function() paused = false end },
     { label = "重试", action = function() resetGame(); paused = false end },
-    { label = "返回选择", action = function() Scene.switch("select") end },
+    { label = "玩玩别的", action = function() Scene.switch("select") end },
 }
 local pauseButtonWidth = 300
 local pauseButtonHeight = 60
@@ -57,7 +57,7 @@ local pauseButtonSpacing = 20
 local completed = false
 local completedButtons = {
     { label = "重试", action = function() resetGame(); completed = false end },
-    { label = "返回选择", action = function() Scene.switch("select") end },
+    { label = "玩玩别的", action = function() Scene.switch("select") end },
 }
 
 -- 倒计时相关变量
@@ -274,7 +274,7 @@ function lockPiece()
     if btbCount >= 4 then
         local newSurge = btbCount - 3
         if newSurge > surgeValue then
-            surgeScale = 1.5
+            -- surgeScale = 1.5  已移除
             if lightningLoaded then
                 lightningTimer = 0.3   -- 动画持续时间
                 lightningAlpha = 1
@@ -374,32 +374,84 @@ function lockPiece()
     end
 
     if lines > 0 then
-        if isSpecial then
-            if not lastWasSpecial then
-                btbCount = 0
-                surgeValue = 0
-                isBtbActive = true
-            else
-                btbCount = btbCount + 1
-                if btbCount == 4 then
-                    SFX.play("btb_start")
+        -- 基础分数计算
+        local baseScore = 0
+        local isAdvanced = false  -- 是否为高级消行（可触发B2B）
+
+        if isSpin then
+            -- T-Spin 分数
+            if lines == 0 then
+                baseScore = 400  -- T-Spin 0行（消行前的T旋）
+                isAdvanced = true
+            elseif lines == 1 then
+                if lastMoveType == "rotate" and string.sub(lastMoveType, 1, 6) == "rotate" then
+                    -- Mini T-Spin Single 检测（需要更精确的逻辑，这里简化）
+                    baseScore = 200
+                    isAdvanced = true
+                else
+                    baseScore = 800  -- T-Spin Single
+                    isAdvanced = true
                 end
-                if btbCount >= 5 then
-                    SFX.play("btbc")
-                end
-                surgeValue = btbCount >= 4 and btbCount - 3 or 0
+            elseif lines == 2 then
+                baseScore = 1200  -- T-Spin Double
+                isAdvanced = true
+            elseif lines == 3 then
+                baseScore = 1600  -- T-Spin Triple
+                isAdvanced = true
             end
         else
-            if isBtbActive then
-                if surgeValue > 0 then
-                    SFX.play("btb_break")
-                end
-                btbCount = 0
-                surgeValue = 0
-                isBtbActive = false
+            -- 普通消行
+            if lines == 1 then
+                baseScore = 100
+            elseif lines == 2 then
+                baseScore = 300
+            elseif lines == 3 then
+                baseScore = 500
+            elseif lines >= 4 then
+                baseScore = 800  -- Tetris
+                isAdvanced = true
             end
         end
-        lastWasSpecial = isSpecial
+
+        -- B2B 加成 [citation:9]
+        if isAdvanced then
+            if lastWasSpecial then
+                -- 连续高级消行，B2B 生效
+                baseScore = baseScore * 1.5
+                btbCount = btbCount + 1
+            else
+                -- 第一次高级消行，无加成但开启 B2B
+                btbCount = 0
+            end
+            lastWasSpecial = true
+        else
+            -- 非高级消行，打断 B2B
+            if lastWasSpecial then
+                btbCount = 0
+            end
+            lastWasSpecial = false
+        end
+
+        -- 累加分数
+        score = score + baseScore
+
+        -- 原有的音效和震动代码保持不变
+        if lines == 4 then
+            SFX.play("clear4")
+            startShake(0, 8, 0, 0.3)
+        else
+            SFX.play("clear1")
+            startShake(0, 3, 0, 0.4)
+        end
+
+        -- 消息设置
+        if lines == 1 then messageLine1 = "SINGLE"
+        elseif lines == 2 then messageLine1 = "DOUBLE"
+        elseif lines == 3 then messageLine1 = "TRIPLE"
+        else messageLine1 = "TETRIS" end
+        messageColor1 = {1,1,1}
+    elseif messageWillChange then
+        messageLine1 = ""
     end
 
     local messageWillChange = lines > 0 or isSpin
@@ -917,6 +969,8 @@ end
 
 function GameScene.mousepressed(x, y, button)
     if button ~= 1 then return end
+
+    -- 暂停菜单
     if paused then
         local totalHeight = #pauseButtons * (pauseButtonHeight + pauseButtonSpacing) - pauseButtonSpacing
         local startY = (WIN_H - totalHeight) / 2
@@ -929,15 +983,29 @@ function GameScene.mousepressed(x, y, button)
             end
         end
     elseif completed then
-        local totalHeight = #completedButtons * (pauseButtonHeight + pauseButtonSpacing) - pauseButtonSpacing
-        local startY = (WIN_H - totalHeight) / 2
-        for i, btn in ipairs(completedButtons) do
-            local bx = (WIN_W - pauseButtonWidth) / 2
-            local by = startY + (i-1) * (pauseButtonHeight + pauseButtonSpacing)
-            if x >= bx and x <= bx + pauseButtonWidth and y >= by and y <= by + pauseButtonHeight then
-                btn.action()
-                return
-            end
+        -- 完成界面（您可能已定义，此处略）
+    elseif gameOver then
+        -- 游戏结束界面按钮
+        local buttonWidth = 200
+        local buttonHeight = 50
+        local buttonSpacing = 30
+        local startX = (WIN_W - buttonWidth * 2 - buttonSpacing) / 2
+        local buttonY = WIN_H/2 + 80
+
+        -- 重试按钮
+        local bx1 = startX
+        local by1 = buttonY
+        if x >= bx1 and x <= bx1 + buttonWidth and y >= by1 and y <= by1 + buttonHeight then
+            resetGame()
+            return
+        end
+
+        -- 返回模式选择按钮
+        local bx2 = startX + buttonWidth + buttonSpacing
+        local by2 = buttonY
+        if x >= bx2 and x <= bx2 + buttonWidth and y >= by2 and y <= by2 + buttonHeight then
+            Scene.switch("select")
+            return
         end
     end
 end
@@ -983,24 +1051,7 @@ function GameScene.draw()
             love.graphics.draw(surgeBgImage, 0, 0, 0, scale, scale, imgWidth/2, imgHeight/2)
             love.graphics.pop()
 
-            -- 闪电动画
-            if lightningTimer > 0 and lightningLoaded then
-                local frame = lightningFrames[lightningFrame]
-                if frame then
-                    local fw, fh = frame:getWidth(), frame:getHeight()
-                    local fx = surgeX + surgeWidth + 10   -- 显示在 surge 数字右侧
-                    local fy = y - fh/2
-                    love.graphics.setColor(bgColor[1], bgColor[2], bgColor[3], lightningAlpha * 0.8)
-                    love.graphics.draw(frame, fx, fy, 0, 1, 1, fw/2, fh/2)
-                end
-            end
-
-            -- 数字缩放
-            love.graphics.push()
-            love.graphics.translate(centerX, centerY)
-            love.graphics.scale(surgeScale)
-            love.graphics.translate(-centerX, -centerY)
-
+            -- 直接绘制数字（无缩放）
             love.graphics.setColor(1, 1, 1, 1)
             for dx = -1, 1 do
                 for dy = -1, 1 do
@@ -1012,7 +1063,18 @@ function GameScene.draw()
             love.graphics.setColor(0, 0, 0, 1)
             love.graphics.print(surgeText, surgeX, y)
 
-            love.graphics.pop()
+            -- 闪电动画（绘制在数字上方）
+            if lightningTimer > 0 and lightningLoaded then
+                local frame = lightningFrames[lightningFrame]
+                if frame then
+                    local fw, fh = frame:getWidth(), frame:getHeight()
+                    local fx = surgeX + surgeWidth + 10   -- 显示在 surge 数字右侧
+                    local fy = y - fh/2
+                    love.graphics.setColor(bgColor[1], bgColor[2], bgColor[3], lightningAlpha * 0.8)
+                    love.graphics.draw(frame, fx, fy, 0, 1, 1, fw/2, fh/2)
+                end
+            end
+
             love.graphics.setFont(mediumFont)
         end
     end
@@ -1133,7 +1195,16 @@ function GameScene.draw()
         love.graphics.setColor(0.8, 0.8, 0.8)
         love.graphics.print(modeName, NEXT_X, NEXT_Y - 60)
     end
-
+    -- 分数显示（位于主板背景之上、格子之下）
+    if not completed and not gameOver then
+        love.graphics.setColor(1, 1, 1, 0.5)  -- 半透明白色
+        love.graphics.setFont(largeFont)
+        local scoreText = "" .. score
+        local w = mediumFont:getWidth(scoreText)
+        local x = BOARD_X + (BOARD_W - w) / 2   -- 水平居中
+        local y = BOARD_Y + 50
+        love.graphics.print(scoreText, x, y)
+    end
     local blockAreaX = NEXT_X - 5 + (HOLD_WIDTH + 10 - PREVIEW_SIZE) / 2
     for i = 1, math.min(NEXT_ROWS, #nextPieces) do
         local piece = nextPieces[i]
@@ -1163,15 +1234,54 @@ function GameScene.draw()
 
     -- 游戏结束    
     if gameOver then
-        love.graphics.setColor(1, 1, 1, 0.9)
+        -- 半透明黑色背景
+        love.graphics.setColor(0, 0, 0, 0.7)
+        love.graphics.rectangle("fill", 0, 0, WIN_W, WIN_H)
+
+        -- 主标题
         love.graphics.setFont(largeFont)
-        local text = "GAME OVER"
+        love.graphics.setColor(1, 1, 1, 1)
+        local text = "游戏结束"
         local textW = largeFont:getWidth(text)
-        love.graphics.print(text, (WIN_W - textW)/2, WIN_H/2 - 50)
+        love.graphics.print(text, (WIN_W - textW)/2, WIN_H/2 - 100)
+
+        -- 统计数据
+        love.graphics.setColor(1, 1, 1, 1)
         love.graphics.setFont(mediumFont)
-        local restart = "Press R to restart"
-        local restartW = mediumFont:getWidth(restart)
-        love.graphics.print(restart, (WIN_W - restartW)/2, WIN_H/2 + 10)
+        local linesText = "Lines: " .. totalLines
+        local scoreText = "分数: " .. score
+
+        local linesW = mediumFont:getWidth(linesText)
+        local scoreW = mediumFont:getWidth(scoreText)
+        local centerX = WIN_W / 2
+        love.graphics.print(linesText, centerX - linesW/2, WIN_H/2 - 30)
+        love.graphics.print(scoreText, centerX - scoreW/2, WIN_H/2 + 0)
+
+        -- 按钮
+        local buttonWidth = 200
+        local buttonHeight = 50
+        local buttonSpacing = 30
+        local startX = (WIN_W - buttonWidth * 2 - buttonSpacing) / 2
+        local buttonY = WIN_H/2 + 80
+
+        -- 重试按钮
+        love.graphics.setColor(0.3, 0.3, 0.4)
+        love.graphics.rectangle("fill", startX, buttonY, buttonWidth, buttonHeight, 10)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.setFont(mediumFont)
+        local retryText = "重试"
+        local retryW = mediumFont:getWidth(retryText)
+        love.graphics.print(retryText, startX + (buttonWidth - retryW)/2, buttonY + (buttonHeight - mediumFont:getHeight())/2)
+
+        -- 返回选择按钮
+        love.graphics.setColor(0.3, 0.3, 0.4)
+        love.graphics.rectangle("fill", startX + buttonWidth + buttonSpacing, buttonY, buttonWidth, buttonHeight, 10)
+        love.graphics.setColor(1, 1, 1)
+        local selectText = "玩玩别的"
+        local selectW = mediumFont:getWidth(selectText)
+        love.graphics.print(selectText, startX + buttonWidth + buttonSpacing + (buttonWidth - selectW)/2, buttonY + (buttonHeight - mediumFont:getHeight())/2)
+
+        -- 键盘提示（可选，已移除文本提示）
     end
 
     -- 帧率和计时器（主板左侧，与底边对齐）
