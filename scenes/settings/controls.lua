@@ -1,4 +1,4 @@
--- scenes/settings.lua
+-- scenes/controls.lua
 local SettingsScene = {}
 local Scene = require("core.scene")
 local Settings = require("core.settings")

@@ -11,6 +11,7 @@ local defaultSettings = {
         rotate180 = "i",
         hardDrop = "space",
         hold = "lalt",
+		restart = "r",
     },
     das = 10,      -- 帧数
     arr = 2,       -- 帧数
