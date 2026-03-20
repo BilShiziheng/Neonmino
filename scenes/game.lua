@@ -132,6 +132,11 @@ G.surgeValue = 0
 G.isBtbActive = false
 G.lastWasSpecial = false
 
+-- Combo 相关
+G.combo = 0
+G.maxCombo = 0
+G.lastCombo = 0
+
 G.lastMusicTrack = nil
 G.musicDisplayTime = 0
 G.musicDisplayDuration = 5
@@ -223,6 +228,7 @@ function spawnNextPiece()
             gameTimer = G.gameTimer,
             pps = G.pps,
             maxBtbCount = G.btbCount,
+            maxCombo = G.maxCombo,
             modeName = G.modeName,
             modeConfig = G.modeConfig,
         })
@@ -325,7 +331,6 @@ function lockPiece()
         if cell[1] < minX then minX = cell[1] end
         if cell[1] > maxX then maxX = cell[1] end
     end
-    local pieceWidth = maxX - minX + 1
     local pieceCenterX = G.currentX + (minX + maxX) / 2
     
     -- 根据落点位置决定倾斜方向
@@ -337,7 +342,7 @@ function lockPiece()
     end
     
     -- 舒缓的抖动效果（强度小，时间长）
-    startShake(tiltX, 2, tiltX * 0.3, 0.4)
+    startShake(tiltX, 5, tiltX * 0.3, 0.4)
 
     local allAboveCeiling = true
     for _, cell in ipairs(shape) do
@@ -357,6 +362,7 @@ function lockPiece()
             gameTimer = G.gameTimer,
             pps = G.pps,
             maxBtbCount = G.btbCount,
+            maxCombo = G.maxCombo,
             modeName = G.modeName,
             modeConfig = G.modeConfig,
         })
@@ -476,7 +482,20 @@ function lockPiece()
     end
     G.score = G.score + baseScore
 
+    -- Combo 逻辑和音效
     if lines > 0 then
+        -- 更新普通连击
+        local oldCombo = G.combo
+        G.combo = G.combo + 1
+        if G.combo > G.maxCombo then
+            G.maxCombo = G.combo
+        end
+        
+        -- 播放连击音效
+        local comboNum = math.min(G.combo, 16)
+        local comboName = "combo_" .. comboNum
+        SFX.play(comboName)
+        
         if isSpecial then
             if not G.lastWasSpecial then
                 G.btbCount = 0
@@ -493,6 +512,11 @@ function lockPiece()
                 G.surgeValue = G.btbCount >= 4 and G.btbCount - 3 or 0
             end
         else
+            -- 没有特殊消除时，重置普通连击并播放 break 音效
+            if G.combo > 1 then
+                SFX.play("combo_break")
+            end
+            G.combo = 0
             if G.isBtbActive then
                 if G.surgeValue > 0 then
                     SFX.play("btb_break")
@@ -503,6 +527,12 @@ function lockPiece()
             end
         end
         G.lastWasSpecial = isSpecial
+    else
+        -- 没有消除行时，重置普通连击并播放 break 音效
+        if G.combo > 0 then
+            SFX.play("combo_break")
+        end
+        G.combo = 0
     end
 
     G.lightningActive = (G.btbCount > 3)  -- 激活闪电装饰
@@ -512,10 +542,10 @@ function lockPiece()
     if lines > 0 then
         if lines == 4 then
             SFX.play("clear4")
-            startShake(0, 6, 0, 0.35)
+            startShake(0, 13, 0, 0.35)
         else
             SFX.play("clear1")
-            startShake(0, 2, 0, 0.3)
+            startShake(0, 7, 0, 0.3)
         end
 
         if lines == 1 then G.messageLine1 = "SINGLE"
@@ -624,6 +654,9 @@ function resetGame()
     G.pps = 0
     G.shake.timer = 0
     G.shake.maxX, G.shake.maxY, G.shake.maxRot = 0, 0, 0
+    G.combo = 0
+    G.maxCombo = 0
+    G.lastCombo = 0
     G.modeCustomState = {}
 
     -- spawnNextPiece()
@@ -802,7 +835,7 @@ function GameScene.update(dt)
         G.musicDisplayTime = G.musicDisplayTime - dt
     end
 
-    if G.dasKey then
+	if G.dasKey then
         if not G.dasMoved then
             G.dasTimer = G.dasTimer + dt
             if G.dasTimer >= G.DAS_DELAY then
@@ -980,6 +1013,7 @@ function GameScene.update(dt)
                 gameTimer = G.gameTimer,
                 pps = G.pps,
                 maxBtbCount = G.btbCount,
+                maxCombo = G.maxCombo,
                 modeName = G.modeName,
                 modeConfig = G.modeConfig,
             })
@@ -1247,6 +1281,24 @@ function GameScene.draw()
 
             love.graphics.setFont(mediumFont)
         end
+    end
+
+    -- Combo 显示
+    if G.combo > 0 then
+        local comboColor
+        if G.combo >= 10 then
+            comboColor = {1, 0.5, 0}  -- 橙色
+        elseif G.combo >= 5 then
+            comboColor = {1, 0.8, 0}  -- 金色
+        else
+            comboColor = {1, 1, 1}    -- 白色
+        end
+        love.graphics.setColor(comboColor[1], comboColor[2], comboColor[3], 1)
+        love.graphics.setFont(mediumFont)
+        local comboText = string.format("%d COMBO", G.combo)
+        local x = G.HOLD_X
+        local y = G.HOLD_Y + G.HOLD_WIDTH + 60  -- BTB显示下方
+        love.graphics.print(comboText, x, y)
     end
 
     -- 音乐信息
