@@ -1,66 +1,114 @@
 -- core/scene.lua
-local SceneManager = {}
+local scene = {}
+local statusbar = require("core.statusbar")
+
 local scenes = {}
 local currentScene = nil
+local nextScene = nil
+local transitionTimer = 0
+local transitionDuration = 0.3
+local transitionState = nil
+local transitionAlpha = 0
 
-function SceneManager.register(name, scene)
-    scenes[name] = scene
+function scene.register(name, sceneTable)
+    scenes[name] = sceneTable
 end
 
-function SceneManager.switch(name)
-    local newScene = scenes[name]
-    if not newScene then
-        error("Scene not found: " .. name)
+function scene.switch(name, ...)
+    if currentScene and scenes[currentScene] and scenes[currentScene].unload then
+        scenes[currentScene].unload()
     end
-    if currentScene and currentScene.unload then
-        currentScene.unload()
-    end
-    currentScene = newScene
-    if currentScene.load then
-        currentScene.load()
-    end
-end
-
-function SceneManager.update(dt)
-    if currentScene and currentScene.update then
-        currentScene.update(dt)
-    end
-end
-
-function SceneManager.draw()
-    if currentScene and currentScene.draw then
-        currentScene.draw()
+    
+    if transitionDuration > 0 and currentScene then
+        nextScene = name
+        transitionState = "fade_out"
+        transitionTimer = 0
+        transitionAlpha = 0
+    else
+        currentScene = name
+        if scenes[currentScene] and scenes[currentScene].load then
+            scenes[currentScene].load(...)
+        end
     end
 end
 
-function SceneManager.keypressed(key)
-    if currentScene and currentScene.keypressed then
-        currentScene.keypressed(key)
+function scene.update(dt)
+    statusbar.update(dt)
+    
+    if transitionState then
+        transitionTimer = transitionTimer + dt
+        
+        if transitionState == "fade_out" then
+            transitionAlpha = transitionTimer / transitionDuration
+            if transitionTimer >= transitionDuration then
+                currentScene = nextScene
+                if scenes[currentScene] and scenes[currentScene].load then
+                    scenes[currentScene].load()
+                end
+                transitionState = "fade_in"
+                transitionTimer = 0
+            end
+        elseif transitionState == "fade_in" then
+            transitionAlpha = 1 - (transitionTimer / transitionDuration)
+            if transitionTimer >= transitionDuration then
+                transitionState = nil
+                nextScene = nil
+                transitionAlpha = 0
+            end
+        end
+        return
+    end
+    
+    if currentScene and scenes[currentScene] and scenes[currentScene].update then
+        scenes[currentScene].update(dt)
     end
 end
 
-function SceneManager.keyreleased(key)
-    if currentScene and currentScene.keyreleased then
-        currentScene.keyreleased(key)
+function scene.draw()
+    if currentScene and scenes[currentScene] and scenes[currentScene].draw then
+        scenes[currentScene].draw()
+    end
+    
+    statusbar.draw()
+    
+    if transitionState then
+        love.graphics.setColor(0, 0, 0, transitionAlpha)
+        love.graphics.rectangle("fill", 0, 0, love.graphics.getWidth(), love.graphics.getHeight())
     end
 end
 
-function SceneManager.mousepressed(x, y, button)
-    if currentScene and currentScene.mousepressed then
-        currentScene.mousepressed(x, y, button)
+function scene.keypressed(key)
+    if currentScene and scenes[currentScene] and scenes[currentScene].keypressed then
+        scenes[currentScene].keypressed(key)
     end
 end
 
-function SceneManager.mousereleased(x, y, button)
-    if currentScene and currentScene.mousereleased then
-        currentScene.mousereleased(x, y, button)
+function scene.keyreleased(key)
+    if currentScene and scenes[currentScene] and scenes[currentScene].keyreleased then
+        scenes[currentScene].keyreleased(key)
     end
 end
 
-function SceneManager.mousemoved(x, y, dx, dy)
-    if currentScene and currentScene.mousemoved then
-        currentScene.mousemoved(x, y, dx, dy)
+function scene.mousepressed(x, y, button)
+    if currentScene and scenes[currentScene] and scenes[currentScene].mousepressed then
+        scenes[currentScene].mousepressed(x, y, button)
     end
 end
 
-return SceneManager
+function scene.mousereleased(x, y, button)
+    if currentScene and scenes[currentScene] and scenes[currentScene].mousereleased then
+        scenes[currentScene].mousereleased(x, y, button)
+    end
+end
+
+function scene.mousemoved(x, y, dx, dy)
+    if currentScene and scenes[currentScene] and scenes[currentScene].mousemoved then
+        scenes[currentScene].mousemoved(x, y, dx, dy)
+    end
+end
+
+function scene.getCurrent()
+    return currentScene
+end
+
+return scene
