@@ -223,6 +223,10 @@ function spawnPiece()
     G.currentY = G.BOARD_HEIGHT + 1
     G.currentRot = 0
     G.lastMoveType = "spawn"
+    
+    -- 根据方块类型播放不同音效
+    local pieceType = string.lower(G.currentPiece)
+    SFX.play("spawn_" .. pieceType)
 
     if not isValid(G.currentPiece, G.currentRot, G.currentX, G.currentY) then
         local ResultScene = require("scenes.result")
@@ -848,7 +852,7 @@ function GameScene.update(dt)
         recreatePauseButtons()
         return
     end
-    
+    SFX.update()
     Button.update()
     Music.update()
     local currentTrack = Music.getCurrentTrack()

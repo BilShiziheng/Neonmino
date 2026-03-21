@@ -16,12 +16,6 @@ end
 function ResultScene.load()
     Music.stop()
     
-    if resultData and resultData.completed then
-        SFX.play("finished")
-    else
-        SFX.play("gameover")
-    end
-    
     local width = love.graphics.getWidth()
     local height = love.graphics.getHeight()
     local centerX = width / 2

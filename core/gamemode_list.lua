@@ -25,5 +25,10 @@ return {
         description = "20G重力模式",
         path = "mode/20G/main.lua"
     },
+    zen = {
+        name = "禅境",
+        description = "消除200行胜利",
+        path = "mode/zen/main.lua"
+    },
     -- 其他模式
 }

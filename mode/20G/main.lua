@@ -1,3 +1,5 @@
 return{
-    start_speed = 0.016  -- 约 1/60 秒，相当于一帧下落一格
+    name = "20G模式",
+    start_speed = 0.016,
+    goal = { type = "lines", value = 2000 }
 }
