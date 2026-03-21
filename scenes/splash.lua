@@ -29,6 +29,46 @@ local waitTimer = 0
 local waitDuration = 2.0
 local progressAlpha = 1
 local promptAlpha = 0
+local logoAlpha = 0
+local logoFadeTimer = 0
+local logoFadeDuration = 0.5
+
+-- 根据时间获取颜色
+local function getTimeColor()
+    local hour = tonumber(os.date("%H"))
+    if hour >= 5 and hour < 8 then
+        return {1, 0.7, 0.3}
+    elseif hour >= 8 and hour < 12 then
+        return {1, 0.85, 0.2}
+    elseif hour >= 12 and hour < 17 then
+        return {0.3, 0.7, 1}
+    elseif hour >= 17 and hour < 19 then
+        return {1, 0.5, 0.2}
+    elseif hour >= 19 and hour < 22 then
+        return {0.8, 0.4, 1}
+    else
+        return {0.5, 0.7, 1}
+    end
+end
+
+-- 绘制空心描边文字
+local function drawHollowText(text, x, y, color, font)
+    love.graphics.setFont(font)
+    
+    -- 描边（8方向）
+    for dx = -2, 2 do
+        for dy = -2, 2 do
+            if math.abs(dx) + math.abs(dy) <= 2 and (dx ~= 0 or dy ~= 0) then
+                love.graphics.setColor(color[1], color[2], color[3], 1)
+                love.graphics.print(text, x + dx, y + dy)
+            end
+        end
+    end
+    
+    -- 空心内部（黑色）
+    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.print(text, x, y)
+end
 
 function SplashScene.load()
     currentStep = 1
@@ -40,8 +80,9 @@ function SplashScene.load()
     waitTimer = 0
     progressAlpha = 1
     promptAlpha = 0
+    logoAlpha = 0
+    logoFadeTimer = 0
     
-    -- 尝试加载Logo图片
     local success, img = pcall(love.graphics.newImage, "assets/images/logo.png")
     if success then
         logoImage = img
@@ -53,7 +94,11 @@ end
 
 function SplashScene.update(dt)
     if isLoading then
-        -- 执行加载步骤
+        if logoAlpha < 1 then
+            logoFadeTimer = logoFadeTimer + dt
+            logoAlpha = math.min(1, logoFadeTimer / logoFadeDuration)
+        end
+        
         if currentStep <= #loadingSteps then
             local step = loadingSteps[currentStep]
             loadingText = step.name
@@ -66,18 +111,15 @@ function SplashScene.update(dt)
             currentStep = currentStep + 1
             loadingProgress = (currentStep - 1) / #loadingSteps
         else
-            -- 加载完成，开始等待
             isLoading = false
             waitTimer = 0
         end
     elseif not showPrompt then
-        -- 等待2秒后开始淡出进度条
         waitTimer = waitTimer + dt
         if waitTimer >= waitDuration then
             fadeOutProgress = true
         end
         
-        -- 进度条淡出
         if fadeOutProgress then
             fadeTimer = fadeTimer + dt
             progressAlpha = 1 - (fadeTimer / fadeDuration)
@@ -88,7 +130,6 @@ function SplashScene.update(dt)
             end
         end
     elseif showPrompt then
-        -- 提示文字淡入
         fadeTimer = fadeTimer + dt
         promptAlpha = math.min(1, fadeTimer / fadeDuration)
     end
@@ -97,32 +138,40 @@ end
 function SplashScene.draw()
     local width = love.graphics.getWidth()
     local height = love.graphics.getHeight()
+    local centerX = width / 2
+    local timeColor = getTimeColor()
     
-    -- 黑色背景
+    -- 背景
     love.graphics.setColor(0, 0, 0, 1)
     love.graphics.rectangle("fill", 0, 0, width, height)
     
-    -- 绘制Logo
-    love.graphics.setColor(1, 1, 1, 1)
+    -- Logo
+    love.graphics.setColor(1, 1, 1, logoAlpha)
     if logoLoaded and logoImage then
         local imgW = logoImage:getWidth()
         local imgH = logoImage:getHeight()
         local scale = math.min(width / imgW * 0.6, height / imgH * 0.5)
-        love.graphics.draw(logoImage, width/2, height/2 - 100, 0, scale, scale, imgW/2, imgH/2)
+        love.graphics.draw(logoImage, centerX, height/2 - 100, 0, scale, scale, imgW/2, imgH/2)
     else
         love.graphics.setFont(largeFont)
         love.graphics.printf(Version.name, 0, height/2 - 120, width, "center")
-        love.graphics.setFont(mediumFont)
-        love.graphics.printf(Version.subtitle, 0, height/2 - 60, width, "center")
     end
     
-    -- 加载进度条（带淡出效果）
+    -- "Based on LOVE2D" 空心描边，使用 largeFont
+    local text = "Based on LOVE2D"
+    local textWidth = largeFont:getWidth(text)
+    local textX = centerX - textWidth / 2
+    local textY = height/2 + 50
+    
+    drawHollowText(text, textX, textY, timeColor, largeFont)
+    
+    -- 进度条
     if not showPrompt then
-        love.graphics.setColor(1, 1, 1, progressAlpha)
         local barWidth = 400
         local barHeight = 8
         local barX = (width - barWidth) / 2
         local barY = height - 150
+        
         love.graphics.setColor(0.3, 0.3, 0.4, progressAlpha)
         love.graphics.rectangle("fill", barX, barY, barWidth, barHeight, 4)
         
@@ -130,18 +179,16 @@ function SplashScene.draw()
         love.graphics.setColor(0.6, 0.8, 1, progressAlpha)
         love.graphics.rectangle("fill", barX, barY, fillWidth, barHeight, 4)
         
-        -- 加载文字
         love.graphics.setFont(mediumFont)
         love.graphics.setColor(1, 1, 1, progressAlpha)
         love.graphics.printf(loadingText, 0, barY - 35, width, "center")
         
-        -- 百分比
         love.graphics.setFont(smallFont)
         love.graphics.setColor(0.7, 0.7, 0.7, progressAlpha)
         love.graphics.printf(string.format("%d%%", math.floor(loadingProgress * 100)), 0, barY - 60, width, "center")
     end
     
-    -- 按任意键开始（淡入）
+    -- 按任意键开始
     if showPrompt then
         love.graphics.setColor(1, 1, 1, promptAlpha)
         love.graphics.setFont(mediumFont)
