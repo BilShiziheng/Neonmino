@@ -25,13 +25,13 @@ function love.conf(t)
     -- ==== 可以禁用的模块 ====
     t.modules.joystick = false  -- 不用手柄
     t.modules.physics = false   -- 不用物理引擎
-    t.modules.touch = false     -- 不用触摸
-    t.modules.video = false     -- 不用视频
+    t.modules.touch = true    -- 不用触摸
+    t.modules.video = true     -- 不用视频
     t.modules.thread = false    -- 不用多线程
     t.modules.data = false      -- 不用数据编码
     t.modules.math = false      -- 可禁用（除非你用了love.math）
-    t.modules.mouse = false     -- 可禁用（俄罗斯方块用键盘）
-    t.modules.system = false    -- 可禁用（除非需要系统信息）
+    t.modules.mouse = true     -- 可禁用（俄罗斯方块用键盘）
+    t.modules.system = true    -- 可禁用（除非需要系统信息）
     
     -- 版本
     t.console = false

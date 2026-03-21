@@ -8,9 +8,11 @@ local SFX = require("core.sfx")
 local Music = require("core.music")
 local Settings = require("core.settings")
 local Scene = require("core.scene")
+local Button = require("core.button")
 
--- 将所有变量放入一个表 G 中，减少 upvalue 数量
+-- 将所有变量放入一个表 G 中
 local G = {}
+local returnFromSettings = false  -- 标记是否从设置返回
 
 -- 常量定义
 G.BOARD_WIDTH = 10
@@ -43,6 +45,7 @@ do
         G.lightningLoaded = true
     end
 end
+
 G.boardFrameImage = nil
 G.frameLoaded = false
 do
@@ -52,40 +55,30 @@ do
         G.frameLoaded = true
     end
 end
+
 G.lightningActive = false
 G.lightningFrameTimer = 0
 G.lightningAlpha = 0
 G.lightningFrame = 1
-G.flashState = 0          -- 0:空闲 1:闪烁中
-G.flashAlpha = 0          -- 当前透明度（0~1）
-G.flashTimer = 0          -- 状态计时器
-G.flashCount = 0          -- 已闪烁次数（每次亮+灭算一次）
-G.flashFrame = 1          -- 当前图片帧
+G.flashState = 0
+G.flashAlpha = 0
+G.flashTimer = 0
+G.flashCount = 0
+G.flashFrame = 1
 G.flashFrameTimer = 0
-G.flashNextTimer = 0      -- 距离下次闪烁的倒计时
-G.flashFrameTimer = 0
+G.flashNextTimer = 0
+
 -- 暂停相关
 G.paused = false
-G.pauseButtons = {
-    { label = "继续", action = function() G.paused = false end },
-    { label = "重试", action = function() resetGame(); G.paused = false end },
-    { label = "返回选择", action = function() Scene.switch("select") end },
-}
-G.pauseButtonWidth = 300
-G.pauseButtonHeight = 60
-G.pauseButtonSpacing = 20
 
 -- 完成界面
 G.completed = false
-G.completedButtons = {
-    { label = "重试", action = function() resetGame(); G.completed = false end },
-    { label = "返回选择", action = function() Scene.switch("select") end },
-}
 
 -- 倒计时
 G.countdown = false
 G.countdownTimer = 0
 G.countdownStep = 0
+G.countdownGo = false
 
 -- 游戏变量
 G.board = {}
@@ -118,6 +111,7 @@ G.DAS_INTERVAL = 2 / 60
 G.dasTimer = 0
 G.dasKey = nil
 G.dasMoved = false
+G.SOFTDROP_FACTOR = 10  -- 还没用上
 G.softDropPressed = false
 
 G.pieceColors = {
@@ -132,11 +126,6 @@ G.surgeValue = 0
 G.isBtbActive = false
 G.lastWasSpecial = false
 
--- Combo 相关
-G.combo = 0
-G.maxCombo = 0
-G.lastCombo = 0
-
 G.lastMusicTrack = nil
 G.musicDisplayTime = 0
 G.musicDisplayDuration = 5
@@ -146,27 +135,13 @@ G.fadeTime = 0.5
 G.surgeBgAngle = 0
 G.surgeBgImage = love.graphics.newImage("assets/images/surge_bg.png")
 G.surgeColors = {
-    [1] = {0.5, 0.5, 0.3},   -- 灰色 (surge 1-4)
-    [2] = {1, 0, 0},          -- 红色 (5-9)
-    [3] = {1, 0.5, 0},        -- 橙色 (10-14)
-    [4] = {1, 1, 0},          -- 黄色 (15-19)
-    [5] = {0, 1, 0},          -- 绿色 (20-24)
-    [6] = {0, 1, 1},          -- 青色 (25-29)
-    [7] = {0, 0, 1},          -- 蓝色 (30-34)
-    [8] = {0.8, 0.2, 1},      -- 紫色 (35-39)
-    [9] = {1, 0, 1},          -- 粉红 (40-44)
-    [10] = {1, 0.5, 1},       -- 浅粉 (45-49)
-    [11] = {0.5, 1, 0.5},     -- 浅绿 (50-54)
-    [12] = {0.5, 0.5, 1},     -- 浅蓝 (55-59)
-    [13] = {1, 1, 0.5},       -- 淡黄 (60-64)
-    [14] = {1, 0.8, 0.5},     -- 杏色 (65-69)
-    [15] = {0.8, 0.8, 0.8},   -- 亮灰 (70-74)
-    [16] = {0.2, 0.8, 0.2},   -- 深绿 (75-79)
-    [17] = {0.2, 0.2, 0.8},   -- 深蓝 (80-84)
-    [18] = {0.8, 0.2, 0.2},   -- 深红 (85-89)
-    [19] = {0.8, 0.8, 0.2},   -- 橄榄 (90-94)
-    [20] = {0.2, 0.8, 0.8},   -- 蓝绿 (95-99)
-    [21] = {1, 1, 1},         -- 白色 (100+)
+    [1] = {0.5, 0.5, 0.3}, [2] = {1, 0, 0}, [3] = {1, 0.5, 0},
+    [4] = {1, 1, 0}, [5] = {0, 1, 0}, [6] = {0, 1, 1},
+    [7] = {0, 0, 1}, [8] = {0.8, 0.2, 1}, [9] = {1, 0, 1},
+    [10] = {1, 0.5, 1}, [11] = {0.5, 1, 0.5}, [12] = {0.5, 0.5, 1},
+    [13] = {1, 1, 0.5}, [14] = {1, 0.8, 0.5}, [15] = {0.8, 0.8, 0.8},
+    [16] = {0.2, 0.8, 0.2}, [17] = {0.2, 0.2, 0.8}, [18] = {0.8, 0.2, 0.2},
+    [19] = {0.8, 0.8, 0.2}, [20] = {0.2, 0.8, 0.8}, [21] = {1, 1, 1},
 }
 G.surgeScale = 1.0
 G.lastSurgeValue = 0
@@ -189,13 +164,51 @@ G.customUpdate = nil
 G.customDraw = nil
 G.modeCustomState = {}
 
--- ===== 辅助函数（使用 G 表）=====
+-- Combo 相关
+G.combo = 0
+G.maxCombo = 0
+G.lastCombo = 0
+
+-- ===== 辅助函数 =====
 function startShake(x, y, rot, duration)
     G.shake.maxX = x
     G.shake.maxY = y
     G.shake.maxRot = rot
     G.shake.duration = duration
     G.shake.timer = duration
+end
+
+-- 重新创建暂停按钮
+function recreatePauseButtons()
+    local width = love.graphics.getWidth()
+    local height = love.graphics.getHeight()
+    local btnWidth = 300
+    local btnHeight = 60
+    local spacing = 20
+    local totalHeight = 4 * (btnHeight + spacing) - spacing
+    local startY = (height - totalHeight) / 2
+    
+    Button.clear()
+    
+    Button.create((width - btnWidth)/2, startY, btnWidth, btnHeight, "继续", function()
+        G.paused = false
+    end)
+    
+    Button.create((width - btnWidth)/2, startY + btnHeight + spacing, btnWidth, btnHeight, "重试", function()
+        resetGame()
+        G.paused = false
+    end)
+    
+    Button.create((width - btnWidth)/2, startY + (btnHeight + spacing) * 2, btnWidth, btnHeight, "设置", function()
+        returnFromSettings = true
+        local SettingsScene = require("scenes.settings")
+        SettingsScene.setReturnScene("game")
+        Scene.switch("settings")
+    end)
+    
+    Button.create((width - btnWidth)/2, startY + (btnHeight + spacing) * 3, btnWidth, btnHeight, "返回选择", function()
+        Scene.switch("select")
+    end)
 end
 
 function spawnPiece()
@@ -212,7 +225,20 @@ function spawnPiece()
     G.lastMoveType = "spawn"
 
     if not isValid(G.currentPiece, G.currentRot, G.currentX, G.currentY) then
-        G.gameOver = true
+        local ResultScene = require("scenes.result")
+        ResultScene.setResult({
+            completed = false,
+            score = G.score,
+            totalLines = G.totalLines,
+            piecesPlaced = G.piecesPlaced,
+            gameTimer = G.gameTimer,
+            pps = G.pps,
+            maxBtbCount = G.btbCount,
+            maxCombo = G.maxCombo,
+            modeName = G.modeName,
+            modeConfig = G.modeConfig,
+        })
+        Scene.switch("result")
         SFX.play("gameover")
     end
 end
@@ -280,7 +306,7 @@ function rotatePiece(dir)
     if G.currentPiece == nil or G.currentX == nil or G.currentY == nil or G.currentRot == nil then
         return false
     end
-	dir = dir % 4
+    dir = dir % 4
     local newRot = (G.currentRot + dir) % 4
     local kicks = RS.getKicks(G.currentPiece, G.currentRot, newRot)
 
@@ -317,15 +343,13 @@ function lockPiece()
     if G.btbCount >= 4 then
         local newSurge = G.btbCount - 3
         if newSurge > G.surgeValue then
-            -- 仅更新数值，不触发闪电（闪电改为持续动画）
         end
         G.surgeValue = newSurge
     else
         G.surgeValue = 0
     end
     
-    -- 计算当前方块的X中心位置（1-10）
-    local shape = RS.getShape(G.currentPiece, G.currentRot)
+    -- 计算落点位置决定倾斜方向
     local minX, maxX = 10, 0
     for _, cell in ipairs(shape) do
         if cell[1] < minX then minX = cell[1] end
@@ -333,16 +357,13 @@ function lockPiece()
     end
     local pieceCenterX = G.currentX + (minX + maxX) / 2
     
-    -- 根据落点位置决定倾斜方向
     local tiltX = 0
     if pieceCenterX <= 4 then
-        tiltX = -2  -- 落在左边，向左倾斜
+        tiltX = -2
     elseif pieceCenterX >= 7 then
-        tiltX = 2   -- 落在右边，向右倾斜
+        tiltX = 2
     end
-    
-    -- 舒缓的抖动效果（强度小，时间长）
-    startShake(tiltX, 5, tiltX * 0.3, 0.4)
+    startShake(tiltX, 2, tiltX * 0.3, 0.4)
 
     local allAboveCeiling = true
     for _, cell in ipairs(shape) do
@@ -352,7 +373,6 @@ function lockPiece()
         end
     end
     if allAboveCeiling then
-        -- 游戏结束，跳转到结算界面
         local ResultScene = require("scenes.result")
         ResultScene.setResult({
             completed = false,
@@ -371,52 +391,53 @@ function lockPiece()
         return
     end
 
-	G.piecesPlaced = G.piecesPlaced + 1
+    G.piecesPlaced = G.piecesPlaced + 1
 
-	local spinType = "none"
-	if string.sub(G.lastMoveType, 1, 6) == "rotate" then
-	    if G.currentPiece == "T" then
-	        local majorcorners, minorcorners = 0, 0
-	        local cornersPos = {
-	            {G.currentX-1, G.currentY+1}, {G.currentX-1, G.currentY-1},
-				{G.currentX+1, G.currentY-1}, {G.currentX+1, G.currentY+1},
-	        }
-	        for _, pos in ipairs(cornersPos) do
-	            local x, y = pos[1], pos[2]
-	            if isBlocked(x, y) then
-					if (G.currentRot + _) % 4 < 2 then
-	                	majorcorners = majorcorners + 1
-					else
-	                	minorcorners = minorcorners + 1
-					end
-	            end
-	        end
-			if majorcorners + minorcorners >= 3 then
-				if majorcorners >= 2 or string.match(G.lastMoveType, "rotate:%d+:(%d+)")[1] == "5" then
-					spinType = "spin"
-				else
-					spinType = "mini"
-				end
-			else
-	        	spinType = "none"
-			end
-	    end
-		if spinType == "none" then
-			local offsets = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} }
-			spinType = G.currentPiece == "T" and "mini" or "spin"
-			for _, offset in ipairs(offsets) do
-				local blocked = false
-				for _, cell in ipairs(shape) do
-					if isBlocked(G.currentX + cell[1] + offset[1], G.currentY + cell[2] + offset[2]) then
-						blocked = true
-					end
-				end
-				if not blocked then
-					spinType = "none"
-				end
-			end
-	    end
-	end
+    local spinType = "none"
+    if string.sub(G.lastMoveType, 1, 6) == "rotate" then
+        if G.currentPiece == "T" then
+            local majorcorners, minorcorners = 0, 0
+            local cornersPos = {
+                {G.currentX-1, G.currentY+1}, {G.currentX-1, G.currentY-1},
+                {G.currentX+1, G.currentY-1}, {G.currentX+1, G.currentY+1},
+            }
+            for idx, pos in ipairs(cornersPos) do
+                local x, y = pos[1], pos[2]
+                if isBlocked(x, y) then
+                    if (G.currentRot + idx) % 4 < 2 then
+                        majorcorners = majorcorners + 1
+                    else
+                        minorcorners = minorcorners + 1
+                    end
+                end
+            end
+            if majorcorners + minorcorners >= 3 then
+                local kickMatch = string.match(G.lastMoveType, "rotate:%d+:(%d+)")
+                if majorcorners >= 2 or (kickMatch and kickMatch == "5") then
+                    spinType = "spin"
+                else
+                    spinType = "mini"
+                end
+            else
+                spinType = "none"
+            end
+        end
+        if spinType == "none" then
+            local offsets = { {-1, 0}, {1, 0}, {0, -1}, {0, 1} }
+            spinType = G.currentPiece == "T" and "mini" or "spin"
+            for _, offset in ipairs(offsets) do
+                local blocked = false
+                for _, cell in ipairs(shape) do
+                    if isBlocked(G.currentX + cell[1] + offset[1], G.currentY + cell[2] + offset[2]) then
+                        blocked = true
+                    end
+                end
+                if not blocked then
+                    spinType = "none"
+                end
+            end
+        end
+    end
 
     for _, cell in ipairs(shape) do
         local x = G.currentX + cell[1]
@@ -454,7 +475,7 @@ function lockPiece()
 
     G.totalLines = G.totalLines + lines
 
-	local isSpecial = false
+    local isSpecial = false
     if lines > 0 and (spinType ~= "none" or lines >= 4) then
         isSpecial = true
     end
@@ -462,39 +483,28 @@ function lockPiece()
     -- 分数计算
     local baseScore = 0
     if spinType == "spin" then
-		if lines <= 4 then
-			baseScore = ({400, 800, 1200, 1600, 2600})[lines + 1]
-		else
-			baseScore = 0
-		end
+        if lines <= 4 then
+            baseScore = ({400, 800, 1200, 1600, 2600})[lines + 1]
+        end
     elseif spinType == "mini" then
-		if lines <= 4 then
-			baseScore = ({100, 200, 400, 800, 1600})[lines + 1]
-		else
-			baseScore = 0
-		end
-	else
-		if lines > 0 and lines <= 4 then
-			baseScore = ({0, 100, 300, 500, 800})[lines + 1]
-		else
-			baseScore = 0
-		end
+        if lines <= 4 then
+            baseScore = ({100, 200, 400, 800, 1600})[lines + 1]
+        end
+    else
+        if lines > 0 and lines <= 4 then
+            baseScore = ({0, 100, 300, 500, 800})[lines + 1]
+        end
     end
     G.score = G.score + baseScore
 
-    -- Combo 逻辑和音效
+    -- Combo 逻辑
     if lines > 0 then
-        -- 更新普通连击
-        local oldCombo = G.combo
         G.combo = G.combo + 1
         if G.combo > G.maxCombo then
             G.maxCombo = G.combo
         end
-        
-        -- 播放连击音效
         local comboNum = math.min(G.combo, 16)
-        local comboName = "combo_" .. comboNum
-        SFX.play(comboName)
+        SFX.play("combo_" .. comboNum)
         
         if isSpecial then
             if not G.lastWasSpecial then
@@ -512,7 +522,6 @@ function lockPiece()
                 G.surgeValue = G.btbCount >= 4 and G.btbCount - 3 or 0
             end
         else
-            -- 没有特殊消除时，重置普通连击并播放 break 音效
             if G.combo > 1 then
                 SFX.play("combo_break")
             end
@@ -528,24 +537,23 @@ function lockPiece()
         end
         G.lastWasSpecial = isSpecial
     else
-        -- 没有消除行时，重置普通连击并播放 break 音效
         if G.combo > 0 then
             SFX.play("combo_break")
         end
         G.combo = 0
     end
 
-    G.lightningActive = (G.btbCount > 3)  -- 激活闪电装饰
+    G.lightningActive = (G.btbCount > 3)
 
     local messageWillChange = lines > 0 or spinType ~= "none"
 
     if lines > 0 then
         if lines == 4 then
             SFX.play("clear4")
-            startShake(0, 13, 0, 0.35)
+            startShake(0, 6, 0, 0.35)
         else
             SFX.play("clear1")
-            startShake(0, 7, 0, 0.3)
+            startShake(0, 2, 0, 0.3)
         end
 
         if lines == 1 then G.messageLine1 = "SINGLE"
@@ -558,11 +566,11 @@ function lockPiece()
     end
 
     if spinType ~= "none" then
-		if spinType == "spin" then
-			G.messageLine2 = G.currentPiece .. "-SPIN"
-		else
-			G.messageLine2 = "MINI " .. G.currentPiece .. "-SPIN"
-		end
+        if spinType == "spin" then
+            G.messageLine2 = G.currentPiece .. "-SPIN"
+        else
+            G.messageLine2 = "MINI " .. G.currentPiece .. "-SPIN"
+        end
         if lines > 0 then
             SFX.play("spin")
         elseif lines == 0 then
@@ -620,6 +628,11 @@ function resetGame()
         table.insert(G.nextPieces, Bag.next())
     end
 
+    local settings = Settings.load()
+    G.DAS_DELAY = settings.das / 60
+    G.DAS_INTERVAL = settings.arr / 60
+    G.SOFTDROP_FACTOR = settings.sdf
+
     G.lightningActive = false
     G.lightningFrameTimer = 0
     G.lightningAlpha = 0
@@ -659,16 +672,18 @@ function resetGame()
     G.lastCombo = 0
     G.modeCustomState = {}
 
-    -- spawnNextPiece()
-	G.currentPiece = nil
-	G.currentX = nil
-	G.currentY = nil
-	G.currentRot = nil
+    G.currentPiece = nil
+    G.currentX = nil
+    G.currentY = nil
+    G.currentRot = nil
 
-	G.countdown = true
+    G.countdown = true
     G.countdownGo = false
     G.countdownTimer = 1
     G.countdownStep = 3
+    
+    -- 创建暂停按钮
+    recreatePauseButtons()
 end
 
 function drawAnimatedMessage()
@@ -762,16 +777,22 @@ end
 
 -- ===== 场景回调 =====
 function GameScene.load()
+    if returnFromSettings then
+        returnFromSettings = false
+        G.paused = true
+        recreatePauseButtons()
+        return
+    end
+
     SFX.load()
 
     G.modeConfig = _G.currentModeConfig or { start_speed = 0.5, name = "未知模式" }
-    _G.currentModeConfig = nil
+    -- _G.currentModeConfig = nil
     if G.modeConfig.start_speed then
         G.fallInterval = G.modeConfig.start_speed
     end
     G.modeName = G.modeConfig.name or "未知模式"
 
-    -- 处理目标函数
     if type(G.modeConfig.goal) == "function" then
         G.goalFunction = G.modeConfig.goal
     elseif type(G.modeConfig.goal) == "table" and G.modeConfig.goal.type then
@@ -795,10 +816,6 @@ function GameScene.load()
     else
         G.customDraw = nil
     end
-
-    local settings = Settings.load()
-    G.DAS_DELAY = settings.das / 60
-    G.DAS_INTERVAL = settings.arr / 60
 
     G.stars = {}
     for i = 1, 200 do
@@ -824,8 +841,16 @@ function GameScene.unload()
 end
 
 function GameScene.update(dt)
-
-	Music.update()
+    -- 从设置返回后恢复暂停状态
+    if returnFromSettings then
+        returnFromSettings = false
+        G.paused = true
+        recreatePauseButtons()
+        return
+    end
+    
+    Button.update()
+    Music.update()
     local currentTrack = Music.getCurrentTrack()
     if currentTrack ~= G.lastMusicTrack then
         G.lastMusicTrack = currentTrack
@@ -835,7 +860,7 @@ function GameScene.update(dt)
         G.musicDisplayTime = G.musicDisplayTime - dt
     end
 
-	if G.dasKey then
+    if G.dasKey then
         if not G.dasMoved then
             G.dasTimer = G.dasTimer + dt
             if G.dasTimer >= G.DAS_DELAY then
@@ -855,16 +880,19 @@ function GameScene.update(dt)
             end
         else
             G.dasTimer = G.dasTimer + dt
-            while G.dasTimer >= G.DAS_INTERVAL do
+			local moveable = true
+            while G.dasTimer >= G.DAS_INTERVAL and moveable do
                 G.dasTimer = G.dasTimer - G.DAS_INTERVAL
                 if G.dasKey == "left" then 
                     local moved = movePiece(-1, 0, true)
                     if not moved then
+						moveable = false;
                         startShake(-3, 0, 0, 0.15)
                     end
                 elseif G.dasKey == "right" then 
                     local moved = movePiece(1, 0, true)
                     if not moved then
+						moveable = false;
                         startShake(3, 0, 0, 0.15)
                     end
                 end
@@ -879,7 +907,7 @@ function GameScene.update(dt)
         movePiece(0, -1, false)
     end
 
-    if G.countdown or G.countdownGo then
+    if not G.paused and (G.countdown or G.countdownGo) then
         G.countdownTimer = G.countdownTimer - dt
         if G.countdownTimer <= 0 then
             if G.countdownStep > 1 then
@@ -887,29 +915,28 @@ function GameScene.update(dt)
                 G.countdownTimer = G.countdownTimer + 1
                 SFX.play("countdown" .. G.countdownStep)
             elseif G.countdownStep == 1 then
-				G.countdown = false
-				G.countdownGo = true
-	            G.countdownStep = G.countdownStep - 1
-				G.countdownTimer = G.countdownTimer + 1
+                G.countdown = false
+                G.countdownGo = true
+                G.countdownStep = G.countdownStep - 1
+                G.countdownTimer = G.countdownTimer + 1
                 SFX.play("go")
                 if G.currentPiece == nil then
-                    -- print("!!! 倒计时结束但 currentPiece 为 nil，重新生成")
                     spawnNextPiece()
                 end
                 G.isLockPending = false
                 G.lockTimer = 0
                 G.fallTimer = 0
-			else
-				G.countdownGo = false
+            else
+                G.countdownGo = false
             end
         end
         Music.update()
         if G.musicDisplayTime > 0 then
             G.musicDisplayTime = G.musicDisplayTime - dt
         end
-		if G.countdown then
-        	return
-		end
+        if G.countdown then
+            return
+        end
     end
 
     if G.paused or G.completed then
@@ -925,45 +952,33 @@ function GameScene.update(dt)
     end
     G.surgeBgAngle = (G.surgeBgAngle + dt * 2) % (math.pi * 2)
 
-    -- 闪电闪烁逻辑（仅当 btbCount > 3 时生效）
     if G.btbCount > 3 then
         if G.flashState == 0 then
-            -- 空闲状态：递减下次闪烁计时器
             G.flashNextTimer = G.flashNextTimer - dt
             if G.flashNextTimer <= 0 then
-                -- 触发一次闪烁
                 G.flashState = 1
                 G.flashAlpha = 0
                 G.flashTimer = 0
                 G.flashCount = 0
-                -- 随机设置下次闪烁间隔（1.5~3秒）
                 G.flashNextTimer = math.random(15, 30) / 10
             end
         else
-            -- 闪烁状态
             G.flashTimer = G.flashTimer + dt
-            local phase = G.flashTimer / 0.3  -- 每次闪烁总时长0.3秒
+            local phase = G.flashTimer / 0.3
             if phase < 0.15 then
-                -- 淡入阶段
                 G.flashAlpha = phase / 0.15
             elseif phase < 0.25 then
-                -- 保持最亮
                 G.flashAlpha = 1
             elseif phase < 0.4 then
-                -- 淡出阶段
                 G.flashAlpha = 1 - (phase - 0.25) / 0.15
             else
-                -- 一次闪烁结束
                 G.flashCount = G.flashCount + 1
                 if G.flashCount >= 2 then
-                    -- 闪烁两次后结束
                     G.flashState = 0
                     G.flashAlpha = 0
                 else
-                    -- 开始下一次闪烁
                     G.flashTimer = 0
                 end
-                -- 切换帧（简单循环三帧）
                 G.flashFrame = (G.flashFrame % 3) + 1
             end
         end
@@ -1003,7 +1018,6 @@ function GameScene.update(dt)
             custom = G.modeCustomState,
         }
         if G.goalFunction(state) then
-            -- 完成，跳转到结算界面
             local ResultScene = require("scenes.result")
             ResultScene.setResult({
                 completed = true,
@@ -1032,7 +1046,6 @@ function GameScene.update(dt)
     G.gameTimer = G.gameTimer + dt
     G.ppsTimer = G.ppsTimer + dt
     if G.ppsTimer >= 0.008 then
-		--	这个性能问题大吗 先改成 125Hz 了
         G.pps = G.piecesPlaced / G.gameTimer
         G.ppsTimer = 0
     end
@@ -1063,50 +1076,47 @@ function GameScene.update(dt)
             return
         end
     end
-
 end
 
 function GameScene.keypressed(key)
-	local settings = Settings.load()
-	local keys = settings.keys
+    local settings = Settings.load()
+    local keys = settings.keys
 
     if key == keys.restart then
+		G.paused = false
         resetGame()
         return
     end
 
     if key == "escape" then
-        if G.gameOver or G.completed or G.countdown then
+        if G.gameOver or G.completed then
             Scene.switch("select")
         else
             G.paused = not G.paused
-            G.countdownGo = false
         end
         return
     end
 
-	if G.countdown then
-		--	das when countdown
-		if key == keys.left then
-			G.dasKey = "left"
-			G.dasTimer = 0
-			G.dasMoved = false
-		elseif key == keys.right then
-			G.dasKey = "right"
-			G.dasTimer = 0
-			G.dasMoved = false
-	    elseif key == keys.softDrop then
-	        G.softDropPressed = true
-		end
-		return
-	end
+    if G.countdown then
+        if key == keys.left then
+            G.dasKey = "left"
+            G.dasTimer = 0
+            G.dasMoved = false
+        elseif key == keys.right then
+            G.dasKey = "right"
+            G.dasTimer = 0
+            G.dasMoved = false
+        elseif key == keys.softDrop then
+            G.softDropPressed = true
+        end
+        return
+    end
 
-	if G.paused or G.completed or G.gameOver then return end
+    if G.paused or G.completed or G.gameOver then return end
 
     if key == keys.left then
         local moved = movePiece(-1, 0, true)
         if not moved then
-            -- 撞左墙，向左倾斜抖动
             startShake(-3, 0, 0, 0.15)
         end
         G.dasKey = "left"
@@ -1115,7 +1125,6 @@ function GameScene.keypressed(key)
     elseif key == keys.right then
         local moved = movePiece(1, 0, true)
         if not moved then
-            -- 撞右墙，向右倾斜抖动
             startShake(3, 0, 0, 0.15)
         end
         G.dasKey = "right"
@@ -1153,29 +1162,14 @@ end
 
 function GameScene.mousepressed(x, y, button)
     if button ~= 1 then return end
-
+    
     if G.paused then
-        local totalHeight = #G.pauseButtons * (G.pauseButtonHeight + G.pauseButtonSpacing) - G.pauseButtonSpacing
-        local startY = (G.WIN_H - totalHeight) / 2
-        for i, btn in ipairs(G.pauseButtons) do
-            local bx = (G.WIN_W - G.pauseButtonWidth) / 2
-            local by = startY + (i-1) * (G.pauseButtonHeight + G.pauseButtonSpacing)
-            if x >= bx and x <= bx + G.pauseButtonWidth and y >= by and y <= by + G.pauseButtonHeight then
-                btn.action()
-                return
-            end
-        end
-    elseif G.completed then
-        local totalHeight = #G.completedButtons * (G.pauseButtonHeight + G.pauseButtonSpacing) - G.pauseButtonSpacing
-        local startY = (G.WIN_H - totalHeight) / 2
-        for i, btn in ipairs(G.completedButtons) do
-            local bx = (G.WIN_W - G.pauseButtonWidth) / 2
-            local by = startY + (i-1) * (G.pauseButtonHeight + G.pauseButtonSpacing)
-            if x >= bx and x <= bx + G.pauseButtonWidth and y >= by and y <= by + G.pauseButtonHeight then
-                btn.action()
-                return
-            end
-        end
+        Button.checkPress(x, y, button)
+        return
+    end
+    
+    if G.completed then
+        return
     elseif G.gameOver then
         local buttonWidth = 200
         local buttonHeight = 50
@@ -1196,6 +1190,15 @@ function GameScene.mousepressed(x, y, button)
             Scene.switch("select")
             return
         end
+    end
+end
+
+function GameScene.mousereleased(x, y, button)
+    if button ~= 1 then return end
+    
+    if G.paused then
+        Button.checkRelease(x, y, button)
+        return
     end
 end
 
@@ -1232,7 +1235,6 @@ function GameScene.draw()
             local centerX = surgeX + surgeWidth / 2
             local centerY = y + surgeHeight / 2
 
-            -- 旋转背景
             love.graphics.push()
             love.graphics.translate(centerX, centerY)
             love.graphics.rotate(G.surgeBgAngle)
@@ -1243,7 +1245,6 @@ function GameScene.draw()
             love.graphics.draw(G.surgeBgImage, 0, 0, 0, scale, scale, imgWidth/2, imgHeight/2)
             love.graphics.pop()
 
-            -- 数字描边（无缩放）... （你的原有代码）
             love.graphics.setColor(1, 1, 1, 1)
             for dx = -1, 1 do
                 for dy = -1, 1 do
@@ -1255,19 +1256,17 @@ function GameScene.draw()
             love.graphics.setColor(0, 0, 0, 1)
             love.graphics.print(surgeText, surgeX, y)
 
-            -- 闪电动画（绘制在数字上方）
             if G.flashState == 1 and G.lightningLoaded and G.flashAlpha > 0 then
                 local frame = G.lightningFrames[G.flashFrame]
                 if frame then
                     local fw, fh = frame:getWidth(), frame:getHeight()
-                    local fx = surgeX + surgeWidth/2   -- 水平居中
-                    local fy = y + surgeHeight/2 - fh/2  -- 垂直居中（或直接使用 y + surgeHeight/2）
+                    local fx = surgeX + surgeWidth/2
+                    local fy = y + surgeHeight/2 - fh/2
                     love.graphics.setColor(bgColor[1], bgColor[2], bgColor[3], G.flashAlpha * 0.8)
                     love.graphics.draw(frame, fx, fy, 0, 1, 1, fw/2, fh/2)
                 end
             end
 
-            -- 数字描边（无缩放）
             love.graphics.setColor(1, 1, 1, 1)
             for dx = -1, 1 do
                 for dy = -1, 1 do
@@ -1287,17 +1286,17 @@ function GameScene.draw()
     if G.combo > 0 then
         local comboColor
         if G.combo >= 10 then
-            comboColor = {1, 0.5, 0}  -- 橙色
+            comboColor = {1, 0.5, 0}
         elseif G.combo >= 5 then
-            comboColor = {1, 0.8, 0}  -- 金色
+            comboColor = {1, 0.8, 0}
         else
-            comboColor = {1, 1, 1}    -- 白色
+            comboColor = {1, 1, 1}
         end
         love.graphics.setColor(comboColor[1], comboColor[2], comboColor[3], 1)
         love.graphics.setFont(mediumFont)
         local comboText = string.format("%d COMBO", G.combo)
         local x = G.HOLD_X
-        local y = G.HOLD_Y + G.HOLD_WIDTH + 60  -- BTB显示下方
+        local y = G.HOLD_Y + G.HOLD_WIDTH + 60
         love.graphics.print(comboText, x, y)
     end
 
@@ -1342,7 +1341,6 @@ function GameScene.draw()
     if G.shake.timer > 0 then
         love.graphics.push()
         local t = G.shake.timer / G.shake.duration
-        -- 添加缓动，让动画更舒缓（先快后慢）
         local easeOut = 1 - (1 - t) * (1 - t)
         local dx = G.shake.maxX * easeOut
         local dy = G.shake.maxY * easeOut
@@ -1356,7 +1354,8 @@ function GameScene.draw()
     -- 主板背景
     love.graphics.setColor(0.15, 0.15, 0.2, 0.9)
     love.graphics.rectangle("fill", G.BOARD_X - 2, G.BOARD_Y - 2, G.BOARD_W + 4, G.BOARD_H + 4)
-        -- 绘制边框
+    
+    -- 绘制边框
     if G.frameLoaded and G.boardFrameImage then
         local frameWidth = G.BOARD_W + 8
         local frameHeight = G.BOARD_H + 8
@@ -1372,7 +1371,8 @@ function GameScene.draw()
         love.graphics.rectangle("line", G.BOARD_X - 2, G.BOARD_Y - 2, G.BOARD_W + 4, G.BOARD_H + 4)
         love.graphics.setLineWidth(1)
     end
-    -- 分数显示（靠上，半透明）
+    
+    -- 分数显示
     if not G.countdown and not G.paused and not G.completed and not G.gameOver then
         love.graphics.setColor(1, 1, 1, 0.5)
         love.graphics.setFont(mediumFont)
@@ -1383,7 +1383,7 @@ function GameScene.draw()
         love.graphics.print(scoreText, x, y)
     end
 
-    -- 固定格子（上下反转）
+    -- 固定格子
     for y = 1, G.BOARD_HEIGHT do
         for x = 1, G.BOARD_WIDTH do
             local piece = G.board[y][x]
@@ -1471,7 +1471,7 @@ function GameScene.draw()
         love.graphics.print(text, x, y)
     end
 
-	-- 帧率和计时器
+    -- 帧率和计时器
     love.graphics.setColor(1, 1, 1, 0.5)
     love.graphics.setFont(mediumFont)
     local minutes = math.floor(G.gameTimer / 60)
@@ -1532,66 +1532,31 @@ function GameScene.draw()
         })
     end
 
-    if G.paused then
-        love.graphics.setColor(0, 0, 0, 0.5)
-        love.graphics.rectangle("fill", 0, 0, G.WIN_W, G.WIN_H)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.setFont(largeFont)
-        love.graphics.printf("暂停", 0, 200, G.WIN_W, "center")
-
-        local totalHeight = #G.pauseButtons * (G.pauseButtonHeight + G.pauseButtonSpacing) - G.pauseButtonSpacing
-        local startY = (G.WIN_H - totalHeight) / 2
-        for i, btn in ipairs(G.pauseButtons) do
-            local bx = (G.WIN_W - G.pauseButtonWidth) / 2
-            local by = startY + (i-1) * (G.pauseButtonHeight + G.pauseButtonSpacing)
-            love.graphics.setColor(0.3, 0.3, 0.4)
-            love.graphics.rectangle("fill", bx, by, G.pauseButtonWidth, G.pauseButtonHeight, 10)
-            love.graphics.setColor(1, 1, 1)
-            love.graphics.setFont(mediumFont)
-            love.graphics.printf(btn.label, bx, by + (G.pauseButtonHeight - mediumFont:getHeight())/2, G.pauseButtonWidth, "center")
-        end
-    end
-
-    if G.completed then
-        love.graphics.setColor(0, 0, 0, 0.5)
-        love.graphics.rectangle("fill", 0, 0, G.WIN_W, G.WIN_H)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.setFont(largeFont)
-        love.graphics.printf("完成！", 0, 200, G.WIN_W, "center")
-
-        love.graphics.setFont(largeFont)
-        local minutes = math.floor(G.gameTimer / 60)
-        local seconds = math.floor(G.gameTimer % 60)
-        local milliseconds = math.floor((G.gameTimer * 1000) % 1000)
-        local timeText = string.format("%02d:%02d.%03d", minutes, seconds, milliseconds)
-        love.graphics.printf(timeText, 0, 280, G.WIN_W, "center")
-
-        local totalHeight = #G.completedButtons * (G.pauseButtonHeight + G.pauseButtonSpacing) - G.pauseButtonSpacing
-        local startY = (G.WIN_H - totalHeight) / 2 + 100
-        for i, btn in ipairs(G.completedButtons) do
-            local bx = (G.WIN_W - G.pauseButtonWidth) / 2
-            local by = startY + (i-1) * (G.pauseButtonHeight + G.pauseButtonSpacing)
-            love.graphics.setColor(0.3, 0.3, 0.4)
-            love.graphics.rectangle("fill", bx, by, G.pauseButtonWidth, G.pauseButtonHeight, 10)
-            love.graphics.setColor(1, 1, 1)
-            love.graphics.setFont(mediumFont)
-            love.graphics.printf(btn.label, bx, by + (G.pauseButtonHeight - mediumFont:getHeight())/2, G.pauseButtonWidth, "center")
-        end
-    end
-
     if G.countdown or G.countdownGo then
-        -- love.graphics.setColor(0, 0, 0, 0.5)
-        -- love.graphics.rectangle("fill", 0, 0, G.WIN_W, G.WIN_H)
-		local opacity = 1
-		if G.countdown or G.countdownGo then
-			local t = 1 - G.countdownTimer
-			opacity = 1 - t * t * t
-		end
-		love.graphics.setColor(1, 1, 1, opacity)
+        local opacity = 1
+        if G.countdown or G.countdownGo then
+            local t = 1 - G.countdownTimer
+            opacity = 1 - t * t * t
+        end
+        love.graphics.setColor(1, 1, 1, opacity)
         love.graphics.setFont(largeFont)
         local text = G.countdownGo and "GO!" or tostring(G.countdownStep)
         local w = largeFont:getWidth(text)
         love.graphics.print(text, (G.WIN_W - w)/2, G.WIN_H/2 - 50)
+    end
+
+    if G.paused then
+        love.graphics.setColor(0, 0, 0, 0.7)
+        love.graphics.rectangle("fill", 0, 0, G.WIN_W, G.WIN_H)
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.setFont(largeFont)
+        love.graphics.printf("暂停", 0, 200, G.WIN_W, "center")
+        
+        Button.drawAll()
+    end
+
+    if G.completed then
+        -- 完成界面由 result 场景处理
     end
 
     love.graphics.setColor(1, 1, 1)

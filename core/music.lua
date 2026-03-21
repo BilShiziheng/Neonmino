@@ -7,6 +7,7 @@ local tracks = {}           -- 曲目列表
 local currentTrack = nil    -- 当前播放的曲目
 local currentSource = nil   -- Love2D 音频源
 local currentIndex = nil    -- 当前索引
+local masterVolume = 1.0    -- 全局音量
 
 -- 添加一首曲目
 function music.addTrack(filename, title, artist, source)
@@ -49,6 +50,7 @@ function music.playTrack(track, idx)
         currentTrack = track
         currentIndex = idx or 1
         currentSource:setLooping(false)
+        currentSource:setVolume(masterVolume)
         currentSource:play()
         return true
     else
@@ -101,11 +103,17 @@ function music.getCurrentTrack()
     return currentTrack
 end
 
--- 设置音量
-function music.setVolume(vol)
+-- 设置音量 (0-1)
+function music.setVolume(volume)
+    masterVolume = math.max(0, math.min(1, volume))
     if currentSource then
-        pcall(function() currentSource:setVolume(vol) end)
+        currentSource:setVolume(masterVolume)
     end
+end
+
+-- 获取当前音量
+function music.getVolume()
+    return masterVolume
 end
 
 return music

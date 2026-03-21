@@ -3,6 +3,8 @@ local sfx = {}
 local sounds = {}
 local soundPath = "assets/sfx/"
 
+local masterVolume = 1.0  -- 全局音量
+
 local soundFiles = {
     move     = "move.ogg",
     rotate   = "rotate.ogg",
@@ -30,6 +32,7 @@ function sfx.load()
         local path = soundPath .. filename
         local success, source = pcall(love.audio.newSource, path, "static")
         if success and source then
+            source:setVolume(masterVolume)
             sounds[name] = source
         end
     end
@@ -40,11 +43,11 @@ function sfx.play(name, allowOverlap)
     if not s then return end
     if allowOverlap then
         local clone = s:clone()
+        clone:setVolume(masterVolume)
         clone:play()
     else
         s:stop()
         s:play()
-
     end
 end
 
@@ -57,6 +60,19 @@ function sfx.stopAll()
     for _, s in pairs(sounds) do
         s:stop()
     end
+end
+
+-- 设置音量 (0-1)
+function sfx.setVolume(volume)
+    masterVolume = math.max(0, math.min(1, volume))
+    for _, s in pairs(sounds) do
+        s:setVolume(masterVolume)
+    end
+end
+
+-- 获取当前音量
+function sfx.getVolume()
+    return masterVolume
 end
 
 return sfx

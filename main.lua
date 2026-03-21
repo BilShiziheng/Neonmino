@@ -26,6 +26,12 @@ function love.load()
 	Scene.register("settings", SettingsScene)
 	Scene.register("game", GameScene)
 	Scene.register("result", require("scenes.result"))
+	
+	-- 注册设置子场景
+	Scene.register("controls", require("scenes.settings.controls"))
+	Scene.register("handing", require("scenes.settings.handing"))
+	Scene.register("sound", require("scenes.settings.sound"))
+	Scene.register("video", require("scenes.settings.video"))
 
 	Scene.switch("menu")
 end
@@ -57,4 +63,3 @@ end
 function love.mousemoved(x, y, dx, dy)
 	Scene.mousemoved(x, y, dx, dy)
 end
-

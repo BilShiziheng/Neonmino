@@ -1,86 +1,144 @@
 -- scenes/select.lua
 local SelectScene = {}
-local Scene = require("core.scene")          -- 重要：需要引入 Scene
-local gamelist = require("core.gamemode_list")
 
-local modeKeys = {}
-local buttons = {}
+local Scene = require("core.scene")
+local SFX = require("core.sfx")
+local Button = require("core.button")
+local GameModeList = require("core.gamemode_list")
 
-local buttonWidth = 800
-local buttonHeight = 80
-local buttonSpacing = 20
-local startY = 200
+local btnBack
+local modeButtons = {}
+local selectedIndex = 1
+
+-- 将模式表转换为有序列表
+local function getModeList()
+    local list = {}
+    for key, mode in pairs(GameModeList) do
+        mode.key = key
+        table.insert(list, mode)
+    end
+    table.sort(list, function(a, b) return a.name < b.name end)
+    return list
+end
+
+local modes = nil
 
 function SelectScene.load()
-    modeKeys = {}
-    for k, _ in pairs(gamelist) do
-        table.insert(modeKeys, k)
+    Button.clear()
+    modeButtons = {}
+    selectedIndex = 1
+    modes = getModeList()
+    
+    local width = love.graphics.getWidth()
+    local height = love.graphics.getHeight()
+    local centerX = width / 2
+    local btnWidth = 800
+    local btnHeight = 90
+    local spacing = 15
+    
+    -- 计算总高度并垂直居中
+    local totalHeight = #modes * (btnHeight + spacing) + 80
+    local startY = (height - totalHeight) / 2
+    
+    -- 创建模式按钮
+    for i, mode in ipairs(modes) do
+        local y = startY + (i-1) * (btnHeight + spacing)
+        local btn = Button.create(centerX - btnWidth/2, y, btnWidth, btnHeight, mode.name, function()
+            SFX.play("confirm")
+            -- 转换路径：mode/40L/main.lua -> mode.40L.main
+            local path = mode.path:gsub("/", "."):gsub("%.lua$", "")
+            print("加载模式: " .. path)
+            local success, config = pcall(require, path)
+            if success and config then
+                _G.currentModeConfig = config
+                Scene.switch("game")
+            else
+                print("无法加载模式: " .. mode.path)
+                -- 使用默认配置
+                _G.currentModeConfig = { start_speed = 0.5, name = mode.name, description = mode.description }
+                Scene.switch("game")
+            end
+        end)
+        table.insert(modeButtons, { id = btn, mode = mode })
     end
-    table.sort(modeKeys)
-    buttons = {}
-    for i, key in ipairs(modeKeys) do
-        local mode = gamelist[key]
-        table.insert(buttons, {
-            label = mode.name,
-            desc = mode.description,
-            path = mode.path,
-            key = key,
-            y = startY + (i-1) * (buttonHeight + buttonSpacing)
-        })
+    
+    -- 返回按钮
+    local backY = startY + #modes * (btnHeight + spacing) + 20
+    btnBack = Button.create(centerX - 120, backY, 240, 55, "返回主菜单", function()
+        SFX.play("back")
+        Scene.switch("menu")
+    end)
+end
+
+function SelectScene.update(dt)
+    Button.update()
+end
+
+function SelectScene.draw()
+    local width = love.graphics.getWidth()
+    local height = love.graphics.getHeight()
+    
+    -- 背景
+    love.graphics.setColor(0.1, 0.1, 0.15, 1)
+    love.graphics.rectangle("fill", 0, 0, width, height)
+    
+    -- 标题
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.setFont(largeFont)
+    love.graphics.printf("选择模式", 0, 50, width, "center")
+    
+    -- 绘制按钮
+    Button.drawAll()
+    
+    -- 绘制模式描述
+    love.graphics.setFont(smallFont)
+    for _, item in ipairs(modeButtons) do
+        local btn = Button.get(item.id)
+        if btn then
+            local descY = btn.y + btn.h - 30
+            love.graphics.setColor(0.7, 0.7, 0.7, 1)
+            local desc = item.mode.description or ""
+            if #desc > 55 then
+                desc = desc:sub(1, 52) .. "..."
+            end
+            local descWidth = smallFont:getWidth(desc)
+            local descX = btn.x + (btn.w - descWidth) / 2
+            love.graphics.print(desc, descX, descY)
+        end
+    end
+end
+
+function SelectScene.keypressed(key)
+    if key == "up" then
+        selectedIndex = selectedIndex - 1
+        if selectedIndex < 1 then selectedIndex = #modeButtons end
+        SFX.play("select")
+    elseif key == "down" then
+        selectedIndex = selectedIndex + 1
+        if selectedIndex > #modeButtons then selectedIndex = 1 end
+        SFX.play("select")
+    elseif key == "return" or key == "space" then
+        local item = modeButtons[selectedIndex]
+        if item and item.id then
+            local btn = Button.get(item.id)
+            if btn and btn.action then
+                btn.action()
+            end
+        end
+    elseif key == "escape" then
+        SFX.play("back")
+        Scene.switch("menu")
     end
 end
 
 function SelectScene.mousepressed(x, y, button)
     if button ~= 1 then return end
-    for i, btn in ipairs(buttons) do
-        local bx = (1600 - buttonWidth) / 2
-        local by = btn.y
-        if x >= bx and x <= bx + buttonWidth and y >= by and y <= by + buttonHeight then
-            -- 转换路径：将斜杠替换为点，并去掉末尾的 .lua
-            local moduleName = btn.path:gsub("/", "."):gsub("%.lua$", "")
-            local param = require(moduleName)
-            -- 合并列表中的元数据，并确保包含 goal 字段
-            local modeConfig = {
-                name = btn.label,
-                description = btn.desc,
-                start_speed = param.start_speed,
-                goal = param.goal,   -- 关键：加入 goal 字段
-            }
-            _G.currentModeConfig = modeConfig
-            Scene.switch("game")
-            return
-        end
-    end
+    Button.checkPress(x, y, button)
 end
 
-function SelectScene.draw()
-    love.graphics.setColor(1,1,1)
-    love.graphics.setFont(largeFont)
-    love.graphics.printf("选择模式", 0, 50, 1600, "center")
-
-    love.graphics.setFont(mediumFont)
-    for i, btn in ipairs(buttons) do
-        local bx = (1600 - buttonWidth) / 2
-        local by = btn.y
-        love.graphics.setColor(0.2,0.2,0.3)
-        love.graphics.rectangle("fill", bx, by, buttonWidth, buttonHeight, 10)
-        love.graphics.setColor(1,1,1)
-        love.graphics.printf(btn.label, bx, by + 10, buttonWidth, "center")
-        love.graphics.setFont(smallFont)
-        love.graphics.printf(btn.desc, bx, by + 40, buttonWidth, "center")
-        love.graphics.setFont(mediumFont)
-    end
-
-    love.graphics.setColor(0.5,0.5,0.5)
-    love.graphics.print("ESC 返回主菜单", 10, 850)
+function SelectScene.mousereleased(x, y, button)
+    if button ~= 1 then return end
+    Button.checkRelease(x, y, button)
 end
-
-function SelectScene.keypressed(key)
-    if key == "escape" then
-        Scene.switch("menu")
-    end
-end
-
-function SelectScene.update(dt) end
 
 return SelectScene

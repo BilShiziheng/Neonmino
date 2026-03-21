@@ -1,87 +1,53 @@
 -- scenes/result.lua
 local ResultScene = {}
 
--- 引入必要的模块
 local Scene = require("core.scene")
 local SFX = require("core.sfx")
 local Music = require("core.music")
+local Button = require("core.button")
 
--- 场景变量
-local resultData = nil  -- 存储结算数据
+local resultData = nil
+local btnRetry, btnSelect
 
--- 按钮定义
-local buttons = {}
-local buttonWidth = 250
-local buttonHeight = 60
-local buttonSpacing = 30
-
--- 设置结算数据
 function ResultScene.setResult(data)
     resultData = data
 end
 
--- 场景加载
 function ResultScene.load()
-    -- 停止游戏音乐
     Music.stop()
     
-    -- 播放结算音效
     if resultData and resultData.completed then
         SFX.play("finished")
     else
         SFX.play("gameover")
     end
     
-    -- 定义按钮
-    buttons = {
-        {
-            label = "重试",
-            action = function()
-                -- 重新开始当前模式
-                local modeConfig = resultData and resultData.modeConfig
-                if modeConfig then
-                    _G.currentModeConfig = modeConfig
-                    Scene.switch("game")
-                else
-                    Scene.switch("select")
-                end
-            end
-        },
-        {
-            label = "返回模式选择",
-            action = function()
-                Scene.switch("select")
-            end
-        },
-    }
-end
-
-function ResultScene.unload()
-    resultData = nil
+    local width = love.graphics.getWidth()
+    local height = love.graphics.getHeight()
+    local centerX = width / 2
+    local startY = height / 2 + 80
+    local btnWidth = 250
+    local btnHeight = 60
+    local spacing = 30
+    
+    Button.clear()
+    
+    btnRetry = Button.create(centerX - btnWidth/2, startY, btnWidth, btnHeight, "重试", function()
+        if resultData and resultData.modeConfig then
+            _G.currentModeConfig = resultData.modeConfig
+            Scene.switch("game")
+        else
+            Scene.switch("select")
+        end
+    end)
+    
+    btnSelect = Button.create(centerX - btnWidth/2, startY + btnHeight + spacing, btnWidth, btnHeight, "玩玩别的", function()
+        Scene.switch("select")
+    end)
 end
 
 function ResultScene.update(dt)
-    -- 可以添加一些动画效果
-end
-
-function ResultScene.mousepressed(x, y, button)
-    if button ~= 1 then return end
-    
-    local width = love.graphics.getWidth()
-    local totalHeight = #buttons * (buttonHeight + buttonSpacing) - buttonSpacing
-    local startY = 500
-    
-    for i, btn in ipairs(buttons) do
-        local bx = (width - buttonWidth) / 2
-        local by = startY + (i-1) * (buttonHeight + buttonSpacing)
-        
-        if x >= bx and x <= bx + buttonWidth and 
-           y >= by and y <= by + buttonHeight then
-            btn.action()
-            SFX.play("select")
-            return
-        end
-    end
+    Button.update()
 end
 
 function ResultScene.draw()
@@ -107,7 +73,7 @@ function ResultScene.draw()
         return
     end
     
-    -- 标题（完成/游戏结束）
+    -- 标题
     local title = resultData.completed and "完成！" or "游戏结束"
     local titleColor = resultData.completed and {0.3, 0.8, 0.3} or {0.9, 0.3, 0.3}
     
@@ -122,25 +88,21 @@ function ResultScene.draw()
     local infoY = 220
     local lineHeight = 50
     
-    -- 分数
     if resultData.score then
         love.graphics.printf(string.format("分数: %d", resultData.score), 0, infoY, width, "center")
         infoY = infoY + lineHeight
     end
     
-    -- 消除行数
     if resultData.totalLines then
         love.graphics.printf(string.format("消除行数: %d", resultData.totalLines), 0, infoY, width, "center")
         infoY = infoY + lineHeight
     end
     
-    -- 放置方块数
     if resultData.piecesPlaced then
         love.graphics.printf(string.format("放置方块: %d", resultData.piecesPlaced), 0, infoY, width, "center")
         infoY = infoY + lineHeight
     end
     
-    -- 游戏时间
     if resultData.gameTimer then
         local minutes = math.floor(resultData.gameTimer / 60)
         local seconds = math.floor(resultData.gameTimer % 60)
@@ -150,40 +112,40 @@ function ResultScene.draw()
         infoY = infoY + lineHeight
     end
     
-    -- 平均每秒放置方块数
     if resultData.pps and resultData.pps > 0 then
         love.graphics.printf(string.format("PPS: %.2f", resultData.pps), 0, infoY, width, "center")
         infoY = infoY + lineHeight
     end
     
-    -- 最大连击数
     if resultData.maxBtbCount and resultData.maxBtbCount > 0 then
         love.graphics.printf(string.format("最大连击: %d", resultData.maxBtbCount), 0, infoY, width, "center")
         infoY = infoY + lineHeight
     end
     
-    -- 绘制按钮
-    local totalHeight = #buttons * (buttonHeight + buttonSpacing) - buttonSpacing
-    local startY = 500
-    
-    for i, btn in ipairs(buttons) do
-        local bx = (width - buttonWidth) / 2
-        local by = startY + (i-1) * (buttonHeight + buttonSpacing)
-        
-        -- 按钮背景
-        love.graphics.setColor(0.3, 0.3, 0.4, 0.8)
-        love.graphics.rectangle("fill", bx, by, buttonWidth, buttonHeight, 10)
-        
-        -- 按钮边框
-        love.graphics.setColor(0.6, 0.6, 0.7, 1)
-        love.graphics.setLineWidth(2)
-        love.graphics.rectangle("line", bx, by, buttonWidth, buttonHeight, 10)
-        
-        -- 按钮文字
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.setFont(mediumFont)
-        love.graphics.printf(btn.label, bx, by + (buttonHeight - mediumFont:getHeight()) / 2, buttonWidth, "center")
+    if resultData.maxCombo and resultData.maxCombo > 0 then
+        love.graphics.printf(string.format("最大COMBO: %d", resultData.maxCombo), 0, infoY, width, "center")
+        infoY = infoY + lineHeight
     end
+
+    -- 绘制按钮
+    Button.drawAll()
+end
+
+function ResultScene.keypressed(key)
+    if key == "escape" then
+        SFX.play("back")
+        Scene.switch("select")
+    end
+end
+
+function ResultScene.mousepressed(x, y, button)
+    if button ~= 1 then return end
+    Button.checkPress(x, y, button)
+end
+
+function ResultScene.mousereleased(x, y, button)
+    if button ~= 1 then return end
+    Button.checkRelease(x, y, button)
 end
 
 return ResultScene
