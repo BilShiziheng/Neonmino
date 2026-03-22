@@ -14,7 +14,7 @@ local soundItems = {
 }
 
 local startX = 500
-local startY = 40
+local startY = 20
 local lineHeight = 80
 local sliderWidth = 300
 local sliderHeight = 8

@@ -23,7 +23,7 @@ local videoItems = {
 }
 
 local startX = 500
-local startY = 40
+local startY = 20
 local lineHeight = 60
 
 function VideoScene.load()

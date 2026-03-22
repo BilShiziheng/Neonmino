@@ -86,7 +86,11 @@ function MenuScene.draw()
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.printf("Neonmino", 0, 80, width, "center")
     end
-    
+    love.graphics.setFont(mediumFont)
+    love.graphics.setColor(0.7, 0.7, 0.7, 1)
+    local versionText = Version.number
+    local versionWidth = mediumFont:getWidth(versionText)
+    love.graphics.print(versionText, centerX - versionWidth / 2, 200)
     -- 绘制滚动字幕区域边框（白色描边矩形）
     love.graphics.setColor(1, 1, 1, 0.8)
     love.graphics.setLineWidth(2)

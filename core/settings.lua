@@ -1,21 +1,86 @@
 -- core/settings.lua
 local settings = {}
 
-local defaultSettings = {
+defaultSettings = {
+    das = 10,        -- DAS 10帧
+    arr = 2,         -- ARR 2帧
+    sdf = 6,         -- SDF 6倍（6X）
+    lockDelay = 30,
+    musicVolume = 80,
+    sfxVolume = 80,
+    resolutionIndex = 2,
+    fullscreen = false,
+    vsync = true,
     keys = {
-        left = "q",
-        right = "e",
-        softDrop = "w",
-        rotateCW = "p",
-        rotateCCW = "o",
-        rotate180 = "i",
-        hardDrop = "space",
-        hold = "lalt",
-		restart = "r",
-    },
-    das = 10,      -- 帧数
-    arr = 2,       -- 帧数
+        left = {"left"},
+        right = {"right"},
+        softDrop = {"down"},
+        rotateCW = {"up", "z"},
+        rotateCCW = {"x"},
+        rotate180 = {"a"},
+        hardDrop = {"space"},
+        hold = {"c", "shift"},
+        restart = {"r"},
+    }
 }
+
+-- 检查按键是否匹配
+function settings.isKeyPressed(action, key)
+    local keys = settings.get().keys[action]
+    if type(keys) == "table" then
+        for _, k in ipairs(keys) do
+            if k == key then return true end
+        end
+    elseif keys == key then
+        return true
+    end
+    return false
+end
+
+-- 获取按键显示文本
+function settings.getKeyDisplay(action)
+    local keys = settings.get().keys[action]
+    if type(keys) == "table" then
+        return table.concat(keys, " / ")
+    end
+    return keys or "无"
+end
+
+-- 添加按键绑定
+function settings.addKey(action, key)
+    local current = settings.get().keys[action]
+    if type(current) == "table" then
+        table.insert(current, key)
+    else
+        settings.get().keys[action] = {current, key}
+    end
+    settings.save()
+end
+
+-- 移除按键绑定
+function settings.removeKey(action, key)
+    local current = settings.get().keys[action]
+    if type(current) == "table" then
+        local new = {}
+        for _, k in ipairs(current) do
+            if k ~= key then
+                table.insert(new, k)
+            end
+        end
+        if #new == 1 then
+            settings.get().keys[action] = new[1]
+        elseif #new == 0 then
+            settings.get().keys[action] = nil
+        else
+            settings.get().keys[action] = new
+        end
+    elseif current == key then
+        settings.get().keys[action] = nil
+    end
+    settings.save()
+end
+
+-- ... 其他代码保持不变 ...
 
 local userSettings = {}
 

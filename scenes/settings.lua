@@ -127,14 +127,6 @@ function SettingsScene.draw()
 end
 
 function SettingsScene.keypressed(key)
-    if key == "left" then
-        Button.get(btnLeft).action()
-    elseif key == "right" then
-        Button.get(btnRight).action()
-    elseif key == "escape" then
-        Button.get(btnBack).action()
-    end
-    
     if currentPanel == 1 then
         controlsScene.keypressed(key)
     elseif currentPanel == 2 then

@@ -12,7 +12,20 @@ local Button = require("core.button")
 
 -- 将所有变量放入一个表 G 中
 local G = {}
-local returnFromSettings = false  -- 标记是否从设置返回
+local returnFromSettings = false
+
+-- 检查按键是否匹配（支持多键位）
+local function isKeyPressed(action, key)
+    local settings = Settings.load()
+    local keys = settings.keys[action]
+    if type(keys) == "table" then
+        for _, k in ipairs(keys) do
+            if k == key then return true end
+        end
+        return false
+    end
+    return keys == key
+end
 
 -- 常量定义
 G.BOARD_WIDTH = 10
@@ -106,12 +119,12 @@ G.lockTimer = 0
 G.lockDelay = 0.5
 G.isLockPending = false
 
+-- DAS/ARR 支持小数点
 G.DAS_DELAY = 10 / 60
 G.DAS_INTERVAL = 2 / 60
 G.dasTimer = 0
 G.dasKey = nil
 G.dasMoved = false
-G.SOFTDROP_FACTOR = 10  -- 还没用上
 G.softDropPressed = false
 
 G.pieceColors = {
@@ -164,7 +177,7 @@ G.customUpdate = nil
 G.customDraw = nil
 G.modeCustomState = {}
 
--- Combo 相关
+-- Combo 相关（连击从2开始计数）
 G.combo = 0
 G.maxCombo = 0
 G.lastCombo = 0
@@ -224,7 +237,7 @@ function spawnPiece()
     G.currentRot = 0
     G.lastMoveType = "spawn"
     
-    -- 根据方块类型播放不同音效
+    -- 播放生成音效
     local pieceType = string.lower(G.currentPiece)
     SFX.play("spawn_" .. pieceType)
 
@@ -501,14 +514,21 @@ function lockPiece()
     end
     G.score = G.score + baseScore
 
-    -- Combo 逻辑
+    -- Combo 逻辑（连击从2开始计数，即连续2次消除才开始显示）
     if lines > 0 then
-        G.combo = G.combo + 1
-        if G.combo > G.maxCombo then
-            G.maxCombo = G.combo
+        if G.combo == 0 then
+            -- 第一次消除，不计入连击
+            G.combo = 1
+        else
+            -- 第二次及以后消除，增加连击
+            G.combo = G.combo + 1
+            if G.combo > G.maxCombo then
+                G.maxCombo = G.combo
+            end
+            -- 播放连击音效（从2开始）
+            local comboNum = math.min(G.combo, 16)
+            SFX.play("combo_" .. comboNum)
         end
-        local comboNum = math.min(G.combo, 16)
-        SFX.play("combo_" .. comboNum)
         
         if isSpecial then
             if not G.lastWasSpecial then
@@ -526,6 +546,7 @@ function lockPiece()
                 G.surgeValue = G.btbCount >= 4 and G.btbCount - 3 or 0
             end
         else
+            -- 普通消除，如果连击大于1则播放break
             if G.combo > 1 then
                 SFX.play("combo_break")
             end
@@ -541,6 +562,7 @@ function lockPiece()
         end
         G.lastWasSpecial = isSpecial
     else
+        -- 没有消除行时，重置连击
         if G.combo > 0 then
             SFX.play("combo_break")
         end
@@ -631,11 +653,6 @@ function resetGame()
     for i = 1, G.NEXT_ROWS do
         table.insert(G.nextPieces, Bag.next())
     end
-
-    local settings = Settings.load()
-    G.DAS_DELAY = settings.das / 60
-    G.DAS_INTERVAL = settings.arr / 60
-    G.SOFTDROP_FACTOR = settings.sdf
 
     G.lightningActive = false
     G.lightningFrameTimer = 0
@@ -781,17 +798,10 @@ end
 
 -- ===== 场景回调 =====
 function GameScene.load()
-    if returnFromSettings then
-        returnFromSettings = false
-        G.paused = true
-        recreatePauseButtons()
-        return
-    end
-
     SFX.load()
 
     G.modeConfig = _G.currentModeConfig or { start_speed = 0.5, name = "未知模式" }
-    -- _G.currentModeConfig = nil
+    _G.currentModeConfig = nil
     if G.modeConfig.start_speed then
         G.fallInterval = G.modeConfig.start_speed
     end
@@ -819,6 +829,15 @@ function GameScene.load()
         G.customDraw = G.modeConfig.customDraw
     else
         G.customDraw = nil
+    end
+
+    local settings = Settings.load()
+    -- 支持小数点调整
+    G.DAS_DELAY = settings.das / 60
+    G.DAS_INTERVAL = settings.arr / 60
+    -- SDF 支持瞬降（值为0时瞬间落地）
+    if settings.sdf == 0 then
+        G.fallInterval = 0
     end
 
     G.stars = {}
@@ -852,7 +871,7 @@ function GameScene.update(dt)
         recreatePauseButtons()
         return
     end
-    SFX.update()
+    
     Button.update()
     Music.update()
     local currentTrack = Music.getCurrentTrack()
@@ -884,19 +903,16 @@ function GameScene.update(dt)
             end
         else
             G.dasTimer = G.dasTimer + dt
-			local moveable = true
-            while G.dasTimer >= G.DAS_INTERVAL and moveable do
+            while G.dasTimer >= G.DAS_INTERVAL do
                 G.dasTimer = G.dasTimer - G.DAS_INTERVAL
                 if G.dasKey == "left" then 
                     local moved = movePiece(-1, 0, true)
                     if not moved then
-						moveable = false;
                         startShake(-3, 0, 0, 0.15)
                     end
                 elseif G.dasKey == "right" then 
                     local moved = movePiece(1, 0, true)
                     if not moved then
-						moveable = false;
                         startShake(3, 0, 0, 0.15)
                     end
                 end
@@ -911,7 +927,7 @@ function GameScene.update(dt)
         movePiece(0, -1, false)
     end
 
-    if not G.paused and (G.countdown or G.countdownGo) then
+    if G.countdown or G.countdownGo then
         G.countdownTimer = G.countdownTimer - dt
         if G.countdownTimer <= 0 then
             if G.countdownStep > 1 then
@@ -1062,13 +1078,20 @@ function GameScene.update(dt)
         end
     end
 
-    G.fallTimer = G.fallTimer + dt
-    while G.fallTimer >= G.fallInterval do
-        G.fallTimer = G.fallTimer - G.fallInterval
-        if not movePiece(0, -1, false) then
-            if not G.isLockPending then
-                G.isLockPending = true
-                G.lockTimer = 0
+    -- SDF 瞬降处理
+    if G.fallInterval == 0 then
+        -- 瞬降模式：直接锁定
+        while movePiece(0, -1, false) do end
+        lockPiece()
+    else
+        G.fallTimer = G.fallTimer + dt
+        while G.fallTimer >= G.fallInterval do
+            G.fallTimer = G.fallTimer - G.fallInterval
+            if not movePiece(0, -1, false) then
+                if not G.isLockPending then
+                    G.isLockPending = true
+                    G.lockTimer = 0
+                end
             end
         end
     end
@@ -1083,34 +1106,31 @@ function GameScene.update(dt)
 end
 
 function GameScene.keypressed(key)
-    local settings = Settings.load()
-    local keys = settings.keys
-
-    if key == keys.restart then
-		G.paused = false
+    if isKeyPressed("restart", key) then
         resetGame()
         return
     end
 
     if key == "escape" then
-        if G.gameOver or G.completed then
+        if G.gameOver or G.completed or G.countdown then
             Scene.switch("select")
         else
             G.paused = not G.paused
+            G.countdownGo = false
         end
         return
     end
 
     if G.countdown then
-        if key == keys.left then
+        if isKeyPressed("left", key) then
             G.dasKey = "left"
             G.dasTimer = 0
             G.dasMoved = false
-        elseif key == keys.right then
+        elseif isKeyPressed("right", key) then
             G.dasKey = "right"
             G.dasTimer = 0
             G.dasMoved = false
-        elseif key == keys.softDrop then
+        elseif isKeyPressed("softDrop", key) then
             G.softDropPressed = true
         end
         return
@@ -1118,7 +1138,7 @@ function GameScene.keypressed(key)
 
     if G.paused or G.completed or G.gameOver then return end
 
-    if key == keys.left then
+    if isKeyPressed("left", key) then
         local moved = movePiece(-1, 0, true)
         if not moved then
             startShake(-3, 0, 0, 0.15)
@@ -1126,7 +1146,7 @@ function GameScene.keypressed(key)
         G.dasKey = "left"
         G.dasTimer = 0
         G.dasMoved = false
-    elseif key == keys.right then
+    elseif isKeyPressed("right", key) then
         local moved = movePiece(1, 0, true)
         if not moved then
             startShake(3, 0, 0, 0.15)
@@ -1134,32 +1154,29 @@ function GameScene.keypressed(key)
         G.dasKey = "right"
         G.dasTimer = 0
         G.dasMoved = false
-    elseif key == keys.softDrop then
+    elseif isKeyPressed("softDrop", key) then
         G.softDropPressed = true
-    elseif key == keys.rotateCW then
+    elseif isKeyPressed("rotateCW", key) then
         rotatePiece(1)
-    elseif key == keys.rotateCCW then
+    elseif isKeyPressed("rotateCCW", key) then
         rotatePiece(-1)
-    elseif key == keys.rotate180 then
+    elseif isKeyPressed("rotate180", key) then
         rotatePiece(2)
-    elseif key == keys.hardDrop then
+    elseif isKeyPressed("hardDrop", key) then
         hardDrop()
-    elseif key == keys.hold then
+    elseif isKeyPressed("hold", key) then
         hold()
     end
 end
 
 function GameScene.keyreleased(key)
-    local settings = Settings.load()
-    local keys = settings.keys
-
-    if key == keys.left and G.dasKey == "left" then
+    if isKeyPressed("left", key) and G.dasKey == "left" then
         G.dasKey = nil
         G.dasMoved = false
-    elseif key == keys.right and G.dasKey == "right" then
+    elseif isKeyPressed("right", key) and G.dasKey == "right" then
         G.dasKey = nil
         G.dasMoved = false
-    elseif key == keys.softDrop then
+    elseif isKeyPressed("softDrop", key) then
         G.softDropPressed = false
     end
 end
@@ -1286,8 +1303,8 @@ function GameScene.draw()
         end
     end
 
-    -- Combo 显示
-    if G.combo > 0 then
+    -- Combo 显示（只有连击大于等于2时才显示）
+    if G.combo >= 2 then
         local comboColor
         if G.combo >= 10 then
             comboColor = {1, 0.5, 0}
@@ -1536,19 +1553,6 @@ function GameScene.draw()
         })
     end
 
-    if G.countdown or G.countdownGo then
-        local opacity = 1
-        if G.countdown or G.countdownGo then
-            local t = 1 - G.countdownTimer
-            opacity = 1 - t * t * t
-        end
-        love.graphics.setColor(1, 1, 1, opacity)
-        love.graphics.setFont(largeFont)
-        local text = G.countdownGo and "GO!" or tostring(G.countdownStep)
-        local w = largeFont:getWidth(text)
-        love.graphics.print(text, (G.WIN_W - w)/2, G.WIN_H/2 - 50)
-    end
-
     if G.paused then
         love.graphics.setColor(0, 0, 0, 0.7)
         love.graphics.rectangle("fill", 0, 0, G.WIN_W, G.WIN_H)
@@ -1561,6 +1565,19 @@ function GameScene.draw()
 
     if G.completed then
         -- 完成界面由 result 场景处理
+    end
+
+    if G.countdown or G.countdownGo then
+        local opacity = 1
+        if G.countdown or G.countdownGo then
+            local t = 1 - G.countdownTimer
+            opacity = 1 - t * t * t
+        end
+        love.graphics.setColor(1, 1, 1, opacity)
+        love.graphics.setFont(largeFont)
+        local text = G.countdownGo and "GO!" or tostring(G.countdownStep)
+        local w = largeFont:getWidth(text)
+        love.graphics.print(text, (G.WIN_W - w)/2, G.WIN_H/2 - 50)
     end
 
     love.graphics.setColor(1, 1, 1)

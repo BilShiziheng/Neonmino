@@ -158,7 +158,7 @@ function SplashScene.draw()
     end
     
     -- "Based on LOVE2D" 空心描边，使用 largeFont
-    local text = "Based on LOVE2D"
+    local text = "Powered By LOVE2D"
     local textWidth = largeFont:getWidth(text)
     local textX = centerX - textWidth / 2
     local textY = height/2 + 50
