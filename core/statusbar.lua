@@ -7,7 +7,7 @@ local loveVersion = love._version or "LOVE"
 -- 获取操作系统
 local function getOS()
     local osName = love.system.getOS()
-    if osName == "Windows" then return "Win"
+    if osName == "Windows" then return "Windows"
     elseif osName == "OS X" then return "macOS"
     elseif osName == "Linux" then return "Linux"
     elseif osName == "Android" then return "Android"
