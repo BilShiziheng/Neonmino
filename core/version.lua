@@ -2,7 +2,7 @@
 local version = {}
 
 version.name = "Neonmino"
-version.number = "Alpha v0.3.5"
+version.number = "Alpha v0.6.0"
 version.subtitle = "Based on Love2D"
 version.build = "2026.03.21"
 

@@ -6,9 +6,7 @@ local SFX = require("core.sfx")
 local Settings = require("core.settings")
 
 local currentSettings = nil
-local editing = false
-local editingKey = nil
-local editingSlot = nil
+local editing = nil
 
 -- 键位列表
 local keyItems = {
@@ -32,37 +30,12 @@ local function getKeyDisplay(keys, slot)
     local key
     if type(keys) == "table" then
         key = keys[slot]
-    elseif slot == 1 then
-        key = keys
-    else
-        key = nil
-    end
-    
-    if key then
+	end
+
+    if key and key ~= "" then
         return string.upper(key)
     end
     return "无"
-end
-
--- 设置按键
-local function setKey(keys, slot, newKey)
-    if type(keys) == "table" then
-        local newKeys = {keys[1], keys[2]}
-        newKeys[slot] = newKey
-        if newKeys[1] == nil and newKeys[2] == nil then
-            return nil
-        elseif newKeys[2] == nil then
-            return newKeys[1]
-        else
-            return newKeys
-        end
-    else
-        if slot == 1 then
-            return newKey
-        else
-            return {keys, newKey}
-        end
-    end
 end
 
 -- 重置所有键位为默认
@@ -78,9 +51,7 @@ end
 
 function ControlsScene.load()
     currentSettings = Settings.load()
-    editing = false
-    editingKey = nil
-    editingSlot = nil
+    editing = nil
 end
 
 function ControlsScene.update(dt)
@@ -101,7 +72,7 @@ function ControlsScene.draw()
         local slot1X = x + 150
         local key1 = getKeyDisplay(keys, 1)
         
-        if editing and editingKey == item.key and editingSlot == 1 then
+        if editing and editing.key == item.key and editing.slot == 1 then
             love.graphics.setColor(1, 0.8, 0.4, 1)
             love.graphics.print("[按任意键]", slot1X, y)
         else
@@ -113,7 +84,7 @@ function ControlsScene.draw()
         local slot2X = slot1X + 120
         local key2 = getKeyDisplay(keys, 2)
         
-        if editing and editingKey == item.key and editingSlot == 2 then
+        if editing and editing.key == item.key and editing.slot == 2 then
             love.graphics.setColor(1, 0.8, 0.4, 1)
             love.graphics.print("[按任意键]", slot2X, y)
         else
@@ -123,10 +94,11 @@ function ControlsScene.draw()
         
         y = y + lineHeight
     end
-    
+
+--[[
     -- 按钮区域（三个按钮：重置、保存、返回）
-    local width = love.graphics.getWidth()
-    local height = love.graphics.getHeight()
+    local width = WIN_W
+    local height = WIN_H
     local btnY = height - 80
     local btnWidth = 150
     local btnHeight = 45
@@ -151,40 +123,32 @@ function ControlsScene.draw()
     love.graphics.rectangle("fill", startBtnX + (btnWidth + spacing) * 2, btnY, btnWidth, btnHeight, 8)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("返回", startBtnX + (btnWidth + spacing) * 2, btnY + 12, btnWidth, "center")
+]]
 end
 
 function ControlsScene.keypressed(key)
     if editing then
         if key == "escape" then
-            editing = false
-            editingKey = nil
-            editingSlot = nil
             SFX.play("back")
         else
-            local keys = currentSettings.keys[editingKey]
-            local newKeys = setKey(keys, editingSlot, key)
-            currentSettings.keys[editingKey] = newKeys
-            editing = false
-            editingKey = nil
-            editingSlot = nil
+            local keys = currentSettings.keys[editing.key]
+            keys[editing.slot] = key
             Settings.save(currentSettings)
             SFX.play("confirm")
         end
-        return
+		editing = nil
+        return true
     end
-    
-    if key == "escape" then
-        Scene.switch("settings")
-        SFX.play("back")
-    end
+    return false
 end
 
 function ControlsScene.mousepressed(x, y, button)
-    if button ~= 1 then return end
+    if button ~= 1 then return false end
     
-    local width = love.graphics.getWidth()
-    local height = love.graphics.getHeight()
+    local width = WIN_W
+    local height = WIN_H
     
+--[[
     -- 检测按钮点击
     local btnY = height - 80
     local btnWidth = 150
@@ -195,7 +159,7 @@ function ControlsScene.mousepressed(x, y, button)
     -- 重置按钮
     if x >= startBtnX and x <= startBtnX + btnWidth and y >= btnY and y <= btnY + 45 then
         resetToDefault()
-        return
+        return true
     end
     
     -- 保存按钮
@@ -203,15 +167,16 @@ function ControlsScene.mousepressed(x, y, button)
         Settings.save(currentSettings)
         SFX.play("confirm")
         Scene.switch("settings")
-        return
+        return true
     end
     
     -- 返回按钮
     if x >= startBtnX + (btnWidth + spacing) * 2 and x <= startBtnX + (btnWidth + spacing) * 2 + btnWidth and y >= btnY and y <= btnY + 45 then
         SFX.play("back")
         Scene.switch("settings")
-        return
+        return true
     end
+]]
     
     -- 检测点击键位槽位
     local yPos = startY
@@ -220,28 +185,34 @@ function ControlsScene.mousepressed(x, y, button)
             local keys = currentSettings.keys[item.key]
             local slot1X = startX + 150
             local slot2X = slot1X + 120
-            
+			local using = nil
             if x >= slot1X and x <= slot1X + 80 then
-                editing = true
-                editingKey = item.key
-                editingSlot = 1
-                SFX.play("select")
-                return
+                using = {key = item.key, slot = 1}
             end
             if x >= slot2X and x <= slot2X + 80 then
-                editing = true
-                editingKey = item.key
-                editingSlot = 2
-                SFX.play("select")
-                return
+                using = {key = item.key, slot = 2}
             end
-            return
+			if using then
+				if editing and editing.key == using.key and editing.slot == using.slot then
+					local keys = currentSettings.keys[editing.key]
+					keys[editing.slot] = ""
+					Settings.save(currentSettings)
+					SFX.play("select")
+					editing = nil
+				else
+					editing = using
+                	SFX.play("select")
+				end
+				return true
+			end
+            return false
         end
         yPos = yPos + lineHeight
     end
+	return false
 end
 
-function ControlsScene.mousemoved(x, y, dx, dy) end
-function ControlsScene.mousereleased(x, y, button) end
+function ControlsScene.mousemoved(x, y, dx, dy) return false end
+function ControlsScene.mousereleased(x, y, button) return false end
 
 return ControlsScene

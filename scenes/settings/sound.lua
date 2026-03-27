@@ -24,13 +24,8 @@ local draggingItem = nil
 
 function SoundScene.load()
     currentSettings = Settings.load()
-    selected = 1
+    selected = 0
     draggingItem = nil
-    
-    local musicVol = (currentSettings.musicVolume or 80) / 100
-    local sfxVol = (currentSettings.sfxVolume or 80) / 100
-    Music.setVolume(musicVol)
-    SFX.setVolume(sfxVol)
 end
 
 function SoundScene.update(dt)
@@ -42,6 +37,11 @@ function SoundScene.draw()
     for i, item in ipairs(soundItems) do
         local val = currentSettings[item.key] or item.value
         local x = startX
+        
+        if i == selected then
+            love.graphics.setColor(1, 1, 0.6, 1)
+            love.graphics.print(">", x - 30, y)
+        end
         
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.print(item.name .. ": " .. val .. "%", x, y)
@@ -65,45 +65,35 @@ function SoundScene.draw()
 end
 
 function SoundScene.keypressed(key)
-    if key == "up" then
-        selected = selected - 1
-        if selected < 1 then selected = #soundItems end
+    if key == "up" or key == "down" then
+		local dir = key == "up" and -1 or 1
+        selected = selected + dir
+        if selected < 0 then selected = #soundItems end
+        if selected > #soundItems then selected = 0 end
         SFX.play("select")
-    elseif key == "down" then
-        selected = selected + 1
-        if selected > #soundItems then selected = 1 end
-        SFX.play("select")
-    elseif key == "left" then
+		return true
+    elseif selected ~= 0 and (key == "left" or key == "right") then
         local item = soundItems[selected]
-        local newVal = (currentSettings[item.key] or item.value) - 5
-        if newVal >= item.min then
-            currentSettings[item.key] = newVal
-            Settings.save(currentSettings)
-            if item.key == "musicVolume" then
-                Music.setVolume(newVal / 100)
-            else
-                SFX.setVolume(newVal / 100)
-                SFX.play("move")
-            end
+		local dir = key == "left" and -1 or 1
+        local newVal = (currentSettings[item.key] or item.value) + 5 * dir
+		local toVal = math.max(item.min, math.min(item.max, newVal))
+		if currentSettings[item.key] ~= toVal then
+            SFX.play("move")
         end
-    elseif key == "right" then
-        local item = soundItems[selected]
-        local newVal = (currentSettings[item.key] or item.value) + 5
-        if newVal <= item.max then
-            currentSettings[item.key] = newVal
-            Settings.save(currentSettings)
-            if item.key == "musicVolume" then
-                Music.setVolume(newVal / 100)
-            else
-                SFX.setVolume(newVal / 100)
-                SFX.play("move")
-            end
-        end
+        currentSettings[item.key] = toVal
+		if item.key == "musicVolume" then
+			Music.setVolume(newVal / 100)
+		else
+			SFX.setVolume(newVal / 100)
+		end
+        Settings.save(currentSettings)
+		return true
     end
+	return false
 end
 
 function SoundScene.mousepressed(x, y, button)
-    if button ~= 1 then return end
+    if button ~= 1 then return true end
     
     local yPos = startY
     for i, item in ipairs(soundItems) do
@@ -122,10 +112,12 @@ function SoundScene.mousepressed(x, y, button)
             end
             draggingItem = i
             SFX.play("select")
-            return
+            return true
         end
         yPos = yPos + lineHeight
     end
+
+	return false
 end
 
 function SoundScene.mousemoved(x, y, dx, dy)
@@ -136,19 +128,23 @@ function SoundScene.mousemoved(x, y, dx, dy)
         t = math.max(0, math.min(1, t))
         local newVal = math.floor(t * 100)
         currentSettings[item.key] = newVal
-        Settings.save(currentSettings)
         if item.key == "musicVolume" then
             Music.setVolume(newVal / 100)
         else
             SFX.setVolume(newVal / 100)
         end
+		return true
     end
+	return false
 end
 
 function SoundScene.mousereleased(x, y, button)
     if button == 1 then
+        Settings.save(currentSettings)
         draggingItem = nil
+		return true
     end
+	return false
 end
 
 return SoundScene

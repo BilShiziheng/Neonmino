@@ -5,7 +5,7 @@ function love.conf(t)
     t.window.height = 900
     t.window.resizable = false      -- 固定窗口大小
     t.window.vsync = true
-    
+
     -- ==== 俄罗斯方块需要的模块 ====
     -- 核心模块（必须保留）
     t.modules.event = true      -- 事件处理（按键响应必需）
@@ -34,6 +34,6 @@ function love.conf(t)
     t.modules.system = true    -- 可禁用（除非需要系统信息）
     
     -- 版本
-    t.console = false
+    t.console = true
     t.identity = "neonmino_rc"
 end

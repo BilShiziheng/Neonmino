@@ -5,21 +5,34 @@ local Scene = require("core.scene")
 local SFX = require("core.sfx")
 local Settings = require("core.settings")
 local Button = require("core.button")
+local Background = require("core.background")
 
 local returnScene = nil
 local currentPanel = 1
 
 local panels = {
     { name = "键位设置" },
-    { name = "控制设置" },
+    { name = "手感设置" },
     { name = "声音设置" },
     { name = "画面设置" },
 }
 
 local controlsScene = require("scenes.settings.controls")
-local handingScene = require("scenes.settings.handing")
+local handlingScene = require("scenes.settings.handling")
 local soundScene = require("scenes.settings.sound")
 local videoScene = require("scenes.settings.video")
+
+local function getInnerScene()
+    if currentPanel == 1 then
+        return controlsScene
+    elseif currentPanel == 2 then
+        return handlingScene
+    elseif currentPanel == 3 then
+        return soundScene
+    elseif currentPanel == 4 then
+        return videoScene
+    end
+end
 
 local currentSettings = nil
 local btnLeft, btnRight, btnBack
@@ -37,7 +50,7 @@ function SettingsScene.load()
     end
     
     controlsScene.load()
-    handingScene.load()
+    handlingScene.load()
     soundScene.load()
     videoScene.load()
     
@@ -64,26 +77,16 @@ function SettingsScene.load()
 end
 
 function SettingsScene.update(dt)
-    local mx, my = love.mouse.getX(), love.mouse.getY()
+    local mx, my = getMousePosition()
     Button.update(mx, my)
-    
-    if currentPanel == 1 then
-        controlsScene.update(dt)
-    elseif currentPanel == 2 then
-        handingScene.update(dt)
-    elseif currentPanel == 3 then
-        soundScene.update(dt)
-    elseif currentPanel == 4 then
-        videoScene.update(dt)
-    end
+	getInnerScene().update(dt)
 end
 
 function SettingsScene.draw()
-    local width = love.graphics.getWidth()
-    local height = love.graphics.getHeight()
+    Background.draw()
     
-    love.graphics.setColor(0.1, 0.1, 0.15, 1)
-    love.graphics.rectangle("fill", 0, 0, width, height)
+    local width = WIN_W
+    local height = WIN_H
     
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setFont(largeFont)
@@ -114,85 +117,60 @@ function SettingsScene.draw()
     
     love.graphics.push()
     love.graphics.translate(0, 220)
-    if currentPanel == 1 then
-        controlsScene.draw()
-    elseif currentPanel == 2 then
-        handingScene.draw()
-    elseif currentPanel == 3 then
-        soundScene.draw()
-    elseif currentPanel == 4 then
-        videoScene.draw()
-    end
+	getInnerScene().draw()
     love.graphics.pop()
 end
 
 function SettingsScene.keypressed(key)
-    if currentPanel == 1 then
-        controlsScene.keypressed(key)
-    elseif currentPanel == 2 then
-        handingScene.keypressed(key)
-    elseif currentPanel == 3 then
-        soundScene.keypressed(key)
-    elseif currentPanel == 4 then
-        videoScene.keypressed(key)
+	if getInnerScene().keypressed(key) then
+		return true
+	elseif key == "left" then
+        Button.get(btnLeft).action()
+		return true
+    elseif key == "right" then
+        Button.get(btnRight).action()
+		return true
+    elseif key == "escape" then
+        Button.get(btnBack).action()
+		return true
     end
+	return false
 end
 
 function SettingsScene.mousepressed(x, y, button)
-    if button ~= 1 then return end
+    if button ~= 1 then return false end
     
     if Button.checkPress(x, y, button) then
-        return
+        return true
     end
     
     local adjustedY = y - 220
     if adjustedY >= 0 then
-        if currentPanel == 1 then
-            controlsScene.mousepressed(x, adjustedY, button)
-        elseif currentPanel == 2 then
-            handingScene.mousepressed(x, adjustedY, button)
-        elseif currentPanel == 3 then
-            soundScene.mousepressed(x, adjustedY, button)
-        elseif currentPanel == 4 then
-            videoScene.mousepressed(x, adjustedY, button)
-        end
+		return getInnerScene().mousepressed(x, adjustedY, button)
     end
+	return false
 end
 
 function SettingsScene.mousereleased(x, y, button)
-    if button ~= 1 then return end
+    if button ~= 1 then return false end
     
     if Button.checkRelease(x, y, button) then
-        return
+        return true
     end
     
     local adjustedY = y - 220
     if adjustedY >= 0 then
-        if currentPanel == 1 then
-            controlsScene.mousereleased(x, adjustedY, button)
-        elseif currentPanel == 2 then
-            handingScene.mousereleased(x, adjustedY, button)
-        elseif currentPanel == 3 then
-            soundScene.mousereleased(x, adjustedY, button)
-        elseif currentPanel == 4 then
-            videoScene.mousereleased(x, adjustedY, button)
-        end
+		return getInnerScene().mousereleased(x, adjustedY, button)
     end
+	return false
 end
 
 function SettingsScene.mousemoved(x, y, dx, dy)
     local adjustedY = y - 220
     if adjustedY >= 0 then
-        if currentPanel == 1 then
-            controlsScene.mousemoved(x, adjustedY, dx, dy)
-        elseif currentPanel == 2 then
-            handingScene.mousemoved(x, adjustedY, dx, dy)
-        elseif currentPanel == 3 then
-            soundScene.mousemoved(x, adjustedY, dx, dy)
-        elseif currentPanel == 4 then
-            videoScene.mousemoved(x, adjustedY, dx, dy)
-        end
+		return getInnerScene().mousemoved(x, adjustedY, dx, dy)
     end
+	return false
 end
 
 return SettingsScene

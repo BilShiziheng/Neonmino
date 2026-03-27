@@ -1,95 +1,39 @@
 -- core/settings.lua
 local settings = {}
 
-defaultSettings = {
-    das = 10,        -- DAS 10帧
-    arr = 2,         -- ARR 2帧
-    sdf = 6,         -- SDF 6倍（6X）
+local defaultSettings = {
+    das = 10,
+    arr = 2,
+    sdf = 6,
     lockDelay = 30,
     musicVolume = 80,
     sfxVolume = 80,
     resolutionIndex = 2,
     fullscreen = false,
+	resolution = {width = 1600, height = 900},
     vsync = true,
+    background = "solid",
     keys = {
-        left = {"left"},
-        right = {"right"},
-        softDrop = {"down"},
-        rotateCW = {"up", "z"},
-        rotateCCW = {"x"},
-        rotate180 = {"a"},
-        hardDrop = {"space"},
+        left = {"left", ""},
+        right = {"right", ""},
+        softDrop = {"down", ""},
+        rotateCW = {"up", "x"},
+        rotateCCW = {"z", ""},
+        rotate180 = {"a", ""},
+        hardDrop = {"space", ""},
         hold = {"c", "shift"},
-        restart = {"r"},
+        restart = {"r", ""},
     }
 }
 
--- 检查按键是否匹配
-function settings.isKeyPressed(action, key)
-    local keys = settings.get().keys[action]
-    if type(keys) == "table" then
-        for _, k in ipairs(keys) do
-            if k == key then return true end
-        end
-    elseif keys == key then
-        return true
-    end
-    return false
-end
-
--- 获取按键显示文本
-function settings.getKeyDisplay(action)
-    local keys = settings.get().keys[action]
-    if type(keys) == "table" then
-        return table.concat(keys, " / ")
-    end
-    return keys or "无"
-end
-
--- 添加按键绑定
-function settings.addKey(action, key)
-    local current = settings.get().keys[action]
-    if type(current) == "table" then
-        table.insert(current, key)
-    else
-        settings.get().keys[action] = {current, key}
-    end
-    settings.save()
-end
-
--- 移除按键绑定
-function settings.removeKey(action, key)
-    local current = settings.get().keys[action]
-    if type(current) == "table" then
-        local new = {}
-        for _, k in ipairs(current) do
-            if k ~= key then
-                table.insert(new, k)
-            end
-        end
-        if #new == 1 then
-            settings.get().keys[action] = new[1]
-        elseif #new == 0 then
-            settings.get().keys[action] = nil
-        else
-            settings.get().keys[action] = new
-        end
-    elseif current == key then
-        settings.get().keys[action] = nil
-    end
-    settings.save()
-end
-
--- ... 其他代码保持不变 ...
-
-local userSettings = {}
-
-local function merge(t, other)
+local function fallbackMerge(t, other)
     for k, v in pairs(other) do
         if type(v) == "table" then
-            t[k] = t[k] or {}
-            merge(t[k], v)
-        else
+			if type(t[k]) ~= "table" then
+            	t[k] = {}
+			end
+            fallbackMerge(t[k], v)
+        elseif type(v) ~= type(t[k]) then
             t[k] = v
         end
     end
@@ -101,19 +45,18 @@ local function serialize(tbl, indent)
     local str = "{"
     local first = true
     for k, v in pairs(tbl) do
-        if not first then str = str .. "," end
-        first = false
+        if not first then str = str .. "," else first = false end
         str = str .. "\n" .. string.rep(" ", indent + 2)
         if type(k) == "string" then
-            str = str .. "[\"" .. k .. "\"] = "
+            str = str .. "[" .. string.format("%q", k) .. "] = "
         else
             str = str .. "[" .. tostring(k) .. "] = "
         end
         if type(v) == "table" then
             str = str .. serialize(v, indent + 2)
         elseif type(v) == "string" then
-            str = str .. "\"" .. v .. "\""
-        elseif type(v) == "boolean" then
+            str = str .. string.format("%q", v)
+        elseif type(v) == "number" or type(v) == "boolean" or type(v) == "nil" then
             str = str .. tostring(v)
         else
             str = str .. tostring(v)
@@ -123,24 +66,45 @@ local function serialize(tbl, indent)
     return str
 end
 
+local fileReaded = false
+local currentSettings = {}
+local configPath = "settings.lua"
+
 function settings.load()
-    local success, chunk = pcall(love.filesystem.load, "settings.lua")
-    if success and chunk then
-        local loaded = chunk()
-        if type(loaded) == "table" then
-            userSettings = loaded
+	if fileReaded then
+		return currentSettings
+	end
+    if love.filesystem.getInfo(configPath) then
+        local chunk = love.filesystem.load(configPath)
+        if chunk then
+            local ok, loaded = pcall(chunk)
+            if ok and type(loaded) == "table" then
+                currentSettings = loaded
+            end
         end
-    else
-        -- 文件不存在或加载失败，使用空表
-        userSettings = {}
     end
-    merge(defaultSettings, userSettings)
+	fileReaded = true
+	fallbackMerge(currentSettings, defaultSettings)
+    settings.save()
+    return currentSettings
+end
+
+function settings.save()
+    local data = "return " .. serialize(currentSettings)
+    love.filesystem.write(configPath, data)
+end
+
+function settings.get()
+    return currentSettings or defaultSettings
+end
+
+function settings.getDefault()
     return defaultSettings
 end
 
-function settings.save(data)
-    local str = "return " .. serialize(data)
-    love.filesystem.write("settings.lua", str)
+function settings.set(settingsTable)
+    currentSettings = settingsTable
+    settings.save()
 end
 
 return settings

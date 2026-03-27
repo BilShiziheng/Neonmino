@@ -5,12 +5,13 @@ local Scene = require("core.scene")
 local SFX = require("core.sfx")
 local Button = require("core.button")
 local GameModeList = require("core.gamemode_list")
+local Background = require("core.background")
+local Music = require("core.music").createEnv("main")
 
 local btnBack
 local modeButtons = {}
 local selectedIndex = 1
 
--- 将模式表转换为有序列表
 local function getModeList()
     local list = {}
     for key, mode in pairs(GameModeList) do
@@ -24,45 +25,44 @@ end
 local modes = nil
 
 function SelectScene.load()
+	Music.play()
+
     Button.clear()
     modeButtons = {}
     selectedIndex = 1
     modes = getModeList()
     
-    local width = love.graphics.getWidth()
-    local height = love.graphics.getHeight()
+    local width = WIN_W
+    local height = WIN_H
     local centerX = width / 2
-    local btnWidth = 800
+    local btnWidth = 450
     local btnHeight = 90
     local spacing = 15
     
-    -- 计算总高度并垂直居中
     local totalHeight = #modes * (btnHeight + spacing) + 80
     local startY = (height - totalHeight) / 2
     
-    -- 创建模式按钮
     for i, mode in ipairs(modes) do
         local y = startY + (i-1) * (btnHeight + spacing)
         local btn = Button.create(centerX - btnWidth/2, y, btnWidth, btnHeight, mode.name, function()
             SFX.play("confirm")
             -- 转换路径：mode/40L/main.lua -> mode.40L.main
-            local path = mode.path:gsub("/", "."):gsub("%.lua$", "")
+            local path = mode.path:gsub("%.lua$", ""):gsub("/", ".")
             print("加载模式: " .. path)
             local success, config = pcall(require, path)
             if success and config then
+                config.background = mode.background
                 _G.currentModeConfig = config
                 Scene.switch("game")
             else
-                print("无法加载模式: " .. mode.path)
-                -- 使用默认配置
-                _G.currentModeConfig = { start_speed = 0.5, name = mode.name, description = mode.description }
+                print("无法加载模式: " .. mode.path, config)
+                _G.currentModeConfig = { start_speed = 0.5, name = mode.name, description = mode.description, background = mode.background }
                 Scene.switch("game")
             end
         end)
         table.insert(modeButtons, { id = btn, mode = mode })
     end
     
-    -- 返回按钮
     local backY = startY + #modes * (btnHeight + spacing) + 20
     btnBack = Button.create(centerX - 120, backY, 240, 55, "返回主菜单", function()
         SFX.play("back")
@@ -70,32 +70,33 @@ function SelectScene.load()
     end)
 end
 
+function SelectScene.unload(to)
+	if to ~= "splash" and to ~= "menu" and to ~= "select" then
+		Music.stop()
+	end
+end
+
 function SelectScene.update(dt)
     Button.update()
 end
 
 function SelectScene.draw()
-    local width = love.graphics.getWidth()
-    local height = love.graphics.getHeight()
+    Background.draw()
     
-    -- 背景
-    love.graphics.setColor(0.1, 0.1, 0.15, 1)
-    love.graphics.rectangle("fill", 0, 0, width, height)
+    local width = WIN_W
+    local height = WIN_H
     
-    -- 标题
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setFont(largeFont)
     love.graphics.printf("选择模式", 0, 50, width, "center")
     
-    -- 绘制按钮
     Button.drawAll()
     
-    -- 绘制模式描述
     love.graphics.setFont(smallFont)
     for _, item in ipairs(modeButtons) do
         local btn = Button.get(item.id)
         if btn then
-            local descY = btn.y + btn.h - 30
+            local descY = btn.y + btn.h - 22
             love.graphics.setColor(0.7, 0.7, 0.7, 1)
             local desc = item.mode.description or ""
             if #desc > 55 then

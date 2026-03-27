@@ -1,6 +1,8 @@
 -- core/sfx.lua
 local sfx = {}
 
+local Settings = require("core.settings")
+
 local sounds = {}      -- 存储原始音源
 local playing = {}     -- 存储正在播放的实例
 local soundPath = "assets/sfx/"
@@ -73,6 +75,9 @@ function sfx.load()
             print("警告: 无法加载音效 " .. name .. " -> " .. path)
         end
     end
+
+	local currentSettings = Settings.load()
+    masterVolume = (currentSettings.sfxVolume or 80) / 100
 end
 
 -- 播放音效（支持多实例，不打断）

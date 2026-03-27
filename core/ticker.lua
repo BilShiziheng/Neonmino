@@ -4,6 +4,8 @@ local ticker = {}
 -- 字幕列表
 local messages = {
     "欢迎来到**n块**！！11",
+    "时间碎片[**01**]本项目于2026/3/13立项",
+    "时间碎片[**02**]手感优化于Alpha0.6.0版本",
     "redTips:greenTIPs:yellowTips:",
     "red==GOT== DAMMITED **OSK**",
     "garbo大手子blue发力了",
@@ -11,6 +13,9 @@ local messages = {
     "三⭐倍⭐**Ice⭐Cream**!!!",
     "All Perfect yellowPlus+white!!!!111",
     "==大字体！==",
+    "不要问这个结算音乐是red何意味white，因为**pinkvividwhite/bluestasiswhite**好玩!!!",
+    "不好，**捣蛋来袭**！",
+    "您**md**了",
 }
 
 -- 颜色映射
@@ -31,7 +36,7 @@ local colorMap = {
 }
 
 -- 统一使用 mediumFont
-local baseFont = mediumFont
+local baseFont = largeFont
 
 -- 简化的解析器
 local function parseText(text)

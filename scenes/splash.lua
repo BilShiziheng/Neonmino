@@ -13,11 +13,12 @@ local logoLoaded = false
 -- 加载状态
 local loadingProgress = 0
 local loadingText = "正在加载..."
+local MusicEnv = nil
 local loadingSteps = {
     { name = "加载设置", func = function() Settings.load() end },
     { name = "加载音效", func = function() SFX.load() end },
-    { name = "加载音乐", func = function() Music.init() end },
-    { name = "准备就绪", func = function() end },
+	{ name = "加载音乐", func = function() MusicEnv = Music.createEnv("main") MusicEnv.setTracklist("main") end },
+    { name = "准备就绪", func = function() MusicEnv.playNext() end },
 }
 local currentStep = 1
 local isLoading = true
@@ -55,7 +56,6 @@ end
 local function drawHollowText(text, x, y, color, font)
     love.graphics.setFont(font)
     
-    -- 描边（8方向）
     for dx = -2, 2 do
         for dy = -2, 2 do
             if math.abs(dx) + math.abs(dy) <= 2 and (dx ~= 0 or dy ~= 0) then
@@ -65,7 +65,6 @@ local function drawHollowText(text, x, y, color, font)
         end
     end
     
-    -- 空心内部（黑色）
     love.graphics.setColor(0, 0, 0, 1)
     love.graphics.print(text, x, y)
 end
@@ -90,6 +89,12 @@ function SplashScene.load()
     else
         logoLoaded = false
     end
+end
+
+function SplashScene.unload(to)
+	if to ~= "splash" and to ~= "menu" and to ~= "select" then
+		MusicEnv.stop()
+	end
 end
 
 function SplashScene.update(dt)
@@ -136,8 +141,8 @@ function SplashScene.update(dt)
 end
 
 function SplashScene.draw()
-    local width = love.graphics.getWidth()
-    local height = love.graphics.getHeight()
+    local width = WIN_W
+    local height = WIN_H
     local centerX = width / 2
     local timeColor = getTimeColor()
     
@@ -157,7 +162,7 @@ function SplashScene.draw()
         love.graphics.printf(Version.name, 0, height/2 - 120, width, "center")
     end
     
-    -- "Based on LOVE2D" 空心描边，使用 largeFont
+    -- "Powered By LOVE2D"
     local text = "Powered By LOVE2D"
     local textWidth = largeFont:getWidth(text)
     local textX = centerX - textWidth / 2
@@ -199,6 +204,7 @@ end
 function SplashScene.keypressed(key)
     if showPrompt then
         SFX.play("confirm")
+        showPrompt = false
         Scene.switch("menu")
     end
 end
@@ -206,6 +212,7 @@ end
 function SplashScene.mousepressed(x, y, button)
     if showPrompt then
         SFX.play("confirm")
+        showPrompt = false
         Scene.switch("menu")
     end
 end

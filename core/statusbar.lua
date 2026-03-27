@@ -15,30 +15,34 @@ local function getOS()
     else return osName end
 end
 
--- 获取FPS
-local fps = 0
-local fpsTimer = 0
-local fpsCounter = 0
+--[[
+-- 获取TPS
+local tps = 0
+local tpsTimer = 0
+local tpsCounter = 0
+]]
 
 function statusbar.update(dt)
-    -- 计算FPS
-    fpsCounter = fpsCounter + 1
-    fpsTimer = fpsTimer + dt
-    if fpsTimer >= 0.5 then
-        fps = fpsCounter / fpsTimer
-        fpsCounter = 0
-        fpsTimer = 0
+--[[
+    -- 计算TPS
+    tpsCounter = tpsCounter + 1
+    tpsTimer = tpsTimer + dt
+    if tpsTimer >= 0.5 then
+        tps = tpsCounter / tpsTimer
+        tpsCounter = 0
+        tpsTimer = 0
     end
+]]
 end
 
 function statusbar.draw()
-    local width = love.graphics.getWidth()
-    local height = love.graphics.getHeight()
+    local width = WIN_W
+    local height = WIN_H
     local bottomY = height - 25  -- 距离底部25像素
     
     local osName = getOS()
     local versionStr = Version.number
-    local fpsStr = string.format("FPS: %.0f", fps)
+    local fpsStr = string.format("FPS: %.0f", love.timer.getFPS())
     
     local infoText = osName .. " | " .. versionStr .. " | " .. fpsStr
     

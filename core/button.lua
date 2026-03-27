@@ -81,7 +81,7 @@ end
 
 -- 更新悬停状态（每帧调用）
 function button.update()
-    local mx, my = love.mouse.getPosition()
+    local mx, my = getMousePosition()
     local newHoverId = nil
     
     for _, btn in pairs(buttons) do
