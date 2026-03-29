@@ -86,7 +86,7 @@ function SoundScene.keypressed(key)
 		else
 			SFX.setVolume(newVal / 100)
 		end
-        Settings.save(currentSettings)
+        Settings.save()
 		return true
     end
 	return false
@@ -104,7 +104,7 @@ function SoundScene.mousepressed(x, y, button)
             t = math.max(0, math.min(1, t))
             local newVal = math.floor(t * 100)
             currentSettings[item.key] = newVal
-            Settings.save(currentSettings)
+            Settings.save()
             if item.key == "musicVolume" then
                 Music.setVolume(newVal / 100)
             else
@@ -140,7 +140,7 @@ end
 
 function SoundScene.mousereleased(x, y, button)
     if button == 1 then
-        Settings.save(currentSettings)
+        Settings.save()
         draggingItem = nil
 		return true
     end

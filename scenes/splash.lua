@@ -6,6 +6,7 @@ local SFX = require("core.sfx")
 local Music = require("core.music")
 local Settings = require("core.settings")
 local Version = require("core.version")
+local Profile = require("core.profile")
 
 local logoImage = nil
 local logoLoaded = false
@@ -16,6 +17,7 @@ local loadingText = "正在加载..."
 local MusicEnv = nil
 local loadingSteps = {
     { name = "加载设置", func = function() Settings.load() end },
+    { name = "加载用户信息", func = function() Profile.load() end },
     { name = "加载音效", func = function() SFX.load() end },
 	{ name = "加载音乐", func = function() MusicEnv = Music.createEnv("main") MusicEnv.setTracklist("main") end },
     { name = "准备就绪", func = function() MusicEnv.playNext() end },
@@ -98,12 +100,12 @@ function SplashScene.unload(to)
 end
 
 function SplashScene.update(dt)
+	if logoAlpha < 1 then
+		logoFadeTimer = logoFadeTimer + dt
+		logoAlpha = math.min(1, logoFadeTimer / logoFadeDuration)
+	end
+
     if isLoading then
-        if logoAlpha < 1 then
-            logoFadeTimer = logoFadeTimer + dt
-            logoAlpha = math.min(1, logoFadeTimer / logoFadeDuration)
-        end
-        
         if currentStep <= #loadingSteps then
             local step = loadingSteps[currentStep]
             loadingText = step.name

@@ -19,6 +19,12 @@ M.pieces = function(required)
     end
 end
 
+M.pc = function(required)
+    return function(state)
+        return state.PCcount >= required
+    end
+end
+
 M.linesAndTime = function(linesReq, timeReq)
     return function(state)
         return state.totalLines >= linesReq and state.gameTimer <= timeReq

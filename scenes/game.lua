@@ -100,6 +100,7 @@ G.countdownGo = false
 
 -- 游戏变量
 G.board = {}
+G.PCcount = 0
 G.currentPiece = nil
 G.currentX = nil
 G.currentY = nil
@@ -514,6 +515,7 @@ function lockPiece()
 		SFX.play("allclear")
 		G.acTimer = G.acMaxTime
 		G.score = G.score + 3500
+        G.PCcount = G.PCcount + 1
 	end
 	
     local isSpecial = false
@@ -687,6 +689,7 @@ function resetGame()
     G.messageTimer = 0
     G.flashState = 0
     G.flashAlpha = 0
+    G.PCcount = 0
     G.flashTimer = 0
     G.flashCount = 0
     G.flashNextTimer = 0
@@ -1126,6 +1129,7 @@ function GameScene.update(dt)
             totalLines = G.totalLines,
             gameTimer = G.gameTimer,
             piecesPlaced = G.piecesPlaced,
+            PCcount = G.PCcount or 0,
             custom = G.modeCustomState,
         }
         if G.goalFunction(state) then
@@ -1590,7 +1594,15 @@ function GameScene.draw()
         local y = G.BOARD_Y + (G.BOARD_H - largeFont:getHeight()) / 2
         love.graphics.print(text, x, y)
     end
-
+    if G.modeConfig and G.modeConfig.goal and G.modeConfig.goal.type == "pc" then
+        love.graphics.setColor(1, 1, 1, 0.8)
+        love.graphics.setFont(largeFont)
+        local text = "PC: " .. (G.PCcount or 0)
+        local w = largeFont:getWidth(text)
+        local x = G.BOARD_X - w - 40
+        local y = G.BOARD_Y + (G.BOARD_H - largeFont:getHeight()) / 2
+        love.graphics.print(text, x, y)
+    end
     -- 帧率和计时器
     love.graphics.setColor(1, 1, 1, 0.5)
     love.graphics.setFont(mediumFont)

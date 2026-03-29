@@ -45,8 +45,10 @@ function music.init()
 end
 
 function music.setVolume(volume)
-	masterVolume = math.max(0, math.min(1, volume))
-	activeMusicEnv.updateVolume()
+    masterVolume = math.max(0, math.min(1, volume))
+    if activeMusicEnv then
+        activeMusicEnv.updateVolume()
+    end
 end
 
 local envId = 0
@@ -281,7 +283,7 @@ function music.update(dt)
 	end
 end
 
-function music.drawBar()
+function music.draw()
     -- 音乐信息
 	if activeMusicEnv ~= nil then
 		if musicDisplayTime > 0 then

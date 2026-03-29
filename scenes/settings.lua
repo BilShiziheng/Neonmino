@@ -10,28 +10,22 @@ local Background = require("core.background")
 local returnScene = nil
 local currentPanel = 1
 
-local panels = {
-    { name = "键位设置" },
-    { name = "手感设置" },
-    { name = "声音设置" },
-    { name = "画面设置" },
-}
-
 local controlsScene = require("scenes.settings.controls")
 local handlingScene = require("scenes.settings.handling")
+local miscScene = require("scenes.settings.misc")
 local soundScene = require("scenes.settings.sound")
 local videoScene = require("scenes.settings.video")
 
+local panels = {
+    { name = "键位设置", scene = controlsScene },
+    { name = "手感设置", scene = handlingScene },
+    { name = "杂项", scene = miscScene },
+    { name = "声音设置", scene = soundScene },
+    { name = "画面设置", scene = videoScene },
+}
+
 local function getInnerScene()
-    if currentPanel == 1 then
-        return controlsScene
-    elseif currentPanel == 2 then
-        return handlingScene
-    elseif currentPanel == 3 then
-        return soundScene
-    elseif currentPanel == 4 then
-        return videoScene
-    end
+	return panels[currentPanel].scene
 end
 
 local currentSettings = nil
@@ -49,10 +43,9 @@ function SettingsScene.load()
         returnScene = "menu"
     end
     
-    controlsScene.load()
-    handlingScene.load()
-    soundScene.load()
-    videoScene.load()
+    for _, panel in ipairs(panels) do
+		panel.scene.load()
+	end
     
     Button.clear()
     

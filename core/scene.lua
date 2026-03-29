@@ -3,6 +3,9 @@ local scene = {}
 
 local Statusbar = require("core.statusbar")
 local Music = require("core.music")
+local Profile = require("core.profile")
+
+local widgets = {Statusbar, Music, Profile}
 
 local scenes = {}
 local currentScene = nil
@@ -35,9 +38,12 @@ function scene.switch(name, ...)
 end
 
 function scene.update(dt)
-    Statusbar.update(dt)
-	Music.update(dt)
-    
+   	for _, widget in ipairs(widgets) do
+		if widget and widget.update then
+			widget.update(dt)
+		end
+	end
+
     if transitionState then
         transitionTimer = transitionTimer + dt
         
@@ -72,9 +78,12 @@ function scene.draw()
         scenes[currentScene].draw()
     end
     
-    Statusbar.draw()
-	Music.drawBar()
-    
+	for _, widget in ipairs(widgets) do
+		if widget and widget.draw then
+			widget.draw(currentScene)
+		end
+	end
+
     if transitionState then
         love.graphics.setColor(0, 0, 0, transitionAlpha)
         love.graphics.rectangle("fill", 0, 0, WIN_W, WIN_H)
@@ -82,31 +91,31 @@ function scene.draw()
 end
 
 function scene.keypressed(key)
-    if currentScene and scenes[currentScene] and scenes[currentScene].keypressed then
+    if transitionState ~= "fade_out" and currentScene and scenes[currentScene] and scenes[currentScene].keypressed then
         scenes[currentScene].keypressed(key)
     end
 end
 
 function scene.keyreleased(key)
-    if currentScene and scenes[currentScene] and scenes[currentScene].keyreleased then
+    if transitionState ~= "fade_out" and currentScene and scenes[currentScene] and scenes[currentScene].keyreleased then
         scenes[currentScene].keyreleased(key)
     end
 end
 
 function scene.mousepressed(x, y, button)
-    if currentScene and scenes[currentScene] and scenes[currentScene].mousepressed then
+    if transitionState ~= "fade_out" and currentScene and scenes[currentScene] and scenes[currentScene].mousepressed then
         scenes[currentScene].mousepressed(x, y, button)
     end
 end
 
 function scene.mousereleased(x, y, button)
-    if currentScene and scenes[currentScene] and scenes[currentScene].mousereleased then
+    if transitionState ~= "fade_out" and currentScene and scenes[currentScene] and scenes[currentScene].mousereleased then
         scenes[currentScene].mousereleased(x, y, button)
     end
 end
 
 function scene.mousemoved(x, y, dx, dy)
-    if currentScene and scenes[currentScene] and scenes[currentScene].mousemoved then
+    if transitionState ~= "fade_out" and currentScene and scenes[currentScene] and scenes[currentScene].mousemoved then
         scenes[currentScene].mousemoved(x, y, dx, dy)
     end
 end

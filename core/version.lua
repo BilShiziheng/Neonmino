@@ -2,9 +2,9 @@
 local version = {}
 
 version.name = "Neonmino"
-version.number = "Alpha v0.6.0"
+version.number = "Alpha v0.6.5"
 version.subtitle = "Based on Love2D"
-version.build = "2026.03.21"
+version.build = "2026.03.29"
 
 -- 获取完整标题
 function version.getTitle()

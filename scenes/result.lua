@@ -7,11 +7,14 @@ local Music = require("core.music").createEnv("result")
 local Button = require("core.button")
 local Settings = require("core.settings")
 local Background = require("core.background")
+local Profile = require("core.profile")
 
 Music.setTracklist("result")
 
 local resultData = nil
 local btnRetry, btnSelect, btnExit
+local expGain = 0
+local leveledUp = false
 
 -- 检查按键是否匹配（支持多键位）
 local function isKeyPressed(action, key)
@@ -40,6 +43,25 @@ local function restartGame()
 end
 
 function ResultScene.load()
+    -- 记录游戏数据并增加经验
+    expGain = 0
+    leveledUp = false
+    
+    if resultData then
+        expGain = math.floor((resultData.score or 0) / 10) 
+                + (resultData.totalLines or 0) * 2 
+                + (resultData.maxCombo or 0) * 5
+        
+        Profile.recordGame(
+            resultData.score,
+            resultData.totalLines,
+            resultData.piecesPlaced,
+            resultData.maxCombo
+        )
+        
+        leveledUp = Profile.addExp(expGain)
+    end
+    
 	Music.playNext()
     Background.restore()
     
@@ -150,7 +172,7 @@ function ResultScene.draw()
         love.graphics.printf(string.format("最大COMBO: %d", resultData.maxCombo), 0, infoY, width, "center")
         infoY = infoY + lineHeight
     end
-    
+        
     if resultData.modeName and resultData.modeName ~= "" then
         love.graphics.setColor(0.7, 0.7, 0.7, 1)
         love.graphics.setFont(smallFont)

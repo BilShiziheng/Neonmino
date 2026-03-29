@@ -35,7 +35,7 @@ function SelectScene.load()
     local width = WIN_W
     local height = WIN_H
     local centerX = width / 2
-    local btnWidth = 450
+    local btnWidth = 800
     local btnHeight = 90
     local spacing = 15
     

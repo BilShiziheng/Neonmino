@@ -149,7 +149,7 @@ function VideoScene.keypressed(key)
                 currentSettings.background = bgName
                 Background.setDefault(bgName)
             end
-            Settings.save(currentSettings)
+            Settings.save()
             SFX.play("move")
         elseif item.type == "toggle" then
             item.value = not item.value
@@ -160,7 +160,7 @@ function VideoScene.keypressed(key)
                 currentSettings.vsync = item.value
                 love.window.setVSync(item.value)
             end
-            Settings.save(currentSettings)
+            Settings.save()
             SFX.play("move")
         end
 		return true
@@ -179,7 +179,7 @@ function VideoScene.mousepressed(x, y, button)
         local bgName = item.options[item.value + 1]
         currentSettings.background = bgName
         Background.setDefault(bgName)
-        Settings.save(currentSettings)
+        Settings.save()
         SFX.play("move")
         return true
     end
@@ -191,7 +191,7 @@ function VideoScene.mousepressed(x, y, button)
         local bgName = item.options[item.value + 1]
         currentSettings.background = bgName
         Background.setDefault(bgName)
-        Settings.save(currentSettings)
+        Settings.save()
         SFX.play("move")
         return true
     end
@@ -212,7 +212,7 @@ function VideoScene.mousepressed(x, y, button)
                     currentSettings.vsync = item.value
                     love.window.setVSync(item.value)
                 end
-                Settings.save(currentSettings)
+                Settings.save()
                 SFX.play("move")
             end
             return true

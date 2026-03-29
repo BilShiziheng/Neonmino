@@ -101,7 +101,7 @@ function HandlingScene.keypressed(key)
         	SFX.play("move")
 		end
         currentSettings[item.key] = toVal
-        Settings.save(currentSettings)
+        Settings.save()
 		return true
     end
 	return false
@@ -170,7 +170,7 @@ end
 
 function HandlingScene.mousereleased(x, y, button)
     if button == 1 then
-        Settings.save(currentSettings)
+        Settings.save()
         draggingItem = nil
 		return true
     end
